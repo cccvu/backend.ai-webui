@@ -2890,6 +2890,8 @@
       "InvalidMountsSelectionWarning": "Klasör seçim bilgileri geçerli değil. Seçilen klasöre göz atın.",
       "InvalidPortFormat": "Bağlantı noktası numarası biçimi yanlış.",
       "Launch": "Başlatmak",
+      "LaunchBlocked": "Oturum başlatılmadı",
+      "LaunchCheckFailed": "Başlatma öncesi bir denetim başarısız oldu veya yanıt vermedi, bu nedenle oturum başlatılmadı. Lütfen tekrar deneyin.",
       "LaunchConfirmationDialog": "Kodunuzu ve verilerinizi saklamak veya diğer ortak çalışanlarla paylaşmak için, veri ve depolama kenar çubuğunda bir depolama klasörü oluşturmanız, ardından kaynağı başlattığınızda bu klasörü bağlamanız ve orada tutmanız yeterlidir.",
       "LaunchMultipleSessions": "Birden Fazla Oturum Başlat",
       "LaunchMultipleSessionsDescription": "Aynı yapılandırmayla birden fazla oturumu tek seferde başlatın. Her oturum, aşağıda gösterilen kaynaklarla bağımsız olarak oluşturulur.",

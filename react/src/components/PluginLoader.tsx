@@ -12,8 +12,14 @@
  * 4. Extracts metadata (menuitem, icon, group, permission) from each plugin element
  * 5. Updates Jotai plugin state atoms for navigation menu integration
  * 6. Manages plugin active/inactive state based on the current route
+ * 7. Records the session launcher extension each page plugin declares
+ *    (a static `sessionLauncherExtension` tag on its element class)
  */
 import { useCurrentMenuKey } from '../hooks/useRouteScope';
+import {
+  readSessionLauncherExtensionTag,
+  sessionLauncherExtensionTagsState,
+} from '../hooks/useSessionLauncherExtensions';
 import { configLoadedState, rawConfigState } from '../hooks/useWebUIConfig';
 import {
   type PluginPage,
@@ -24,6 +30,7 @@ import {
 } from '../hooks/useWebUIPluginState';
 import { useBAILogger } from 'backend.ai-ui';
 import { atom, useAtomValue, useSetAtom } from 'jotai';
+import * as _ from 'lodash-es';
 import { useCallback, useEffect, useRef } from 'react';
 
 interface PluginPageElement extends HTMLElement {
@@ -58,6 +65,9 @@ function PluginLoader() {
   const apiEndpoint = useAtomValue(pluginApiEndpointState);
   const setWebUIPlugins = useSetAtom(webUIPluginsState);
   const setPluginLoaded = useSetAtom(pluginLoadedState);
+  const setSessionLauncherExtensionTags = useSetAtom(
+    sessionLauncherExtensionTagsState,
+  );
   const loadingStarted = useAtomValue(pluginLoadingStartedState);
   const setLoadingStarted = useSetAtom(pluginLoadingStartedState);
   const { logger } = useBAILogger();
@@ -89,8 +99,11 @@ function PluginLoader() {
         'menuitem-superadmin': [],
       };
 
+      // Indexed by plugin position so the order follows the configuration.
+      const launcherExtensionTags: Array<string | undefined> = [];
+
       const pluginLoaderQueue: Promise<void>[] = pluginNames.map(
-        async (page) => {
+        async (page, index) => {
           // Sanitize the plugin name to prevent path traversal attacks.
           // Only allow alphanumeric characters, hyphens, and underscores.
           const sanitizedPage = page.replace(/[^a-zA-Z0-9_-]/g, '');
@@ -150,6 +163,15 @@ function PluginLoader() {
               group: pageItem.group,
             };
             plugins.page.push(pluginPageData);
+
+            const launcherExtensionTag = readSessionLauncherExtensionTag(page);
+            if (launcherExtensionTag) {
+              launcherExtensionTags[index] = launcherExtensionTag;
+            } else if (launcherExtensionTag === null) {
+              logger.warn(
+                `Plugin "${page}" declares a session launcher extension that is not a defined custom element`,
+              );
+            }
           } catch (error) {
             logger.warn(`Failed to load plugin "${page}":`, error);
           }
@@ -162,6 +184,7 @@ function PluginLoader() {
       (globalThis as Record<string, unknown>).backendaiPages = plugins.page;
 
       // Update Jotai state
+      setSessionLauncherExtensionTags(_.uniq(_.compact(launcherExtensionTags)));
       setWebUIPlugins(plugins);
       setPluginLoaded(true);
 
@@ -170,7 +193,13 @@ function PluginLoader() {
         new CustomEvent('backend-ai-plugin-loaded', { detail: true }),
       );
     },
-    [apiEndpoint, logger, setWebUIPlugins, setPluginLoaded],
+    [
+      apiEndpoint,
+      logger,
+      setWebUIPlugins,
+      setPluginLoaded,
+      setSessionLauncherExtensionTags,
+    ],
   );
 
   // Mark plugins as loaded when config is loaded but no plugins are configured.

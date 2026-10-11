@@ -2877,6 +2877,8 @@
       "InvalidMountsSelectionWarning": "Folder selection information is not valid. \nCheck out the selected folder.",
       "InvalidPortFormat": "The port number format is incorrect.",
       "Launch": "Launch",
+      "LaunchBlocked": "Session not started",
+      "LaunchCheckFailed": "A launch check failed or did not respond, so no session was started. Please try again.",
       "LaunchConfirmationDialog": "To keep your code and data, or share it with other collaborators, simply create a storage folder in the data & storage sidebar, then mount that folder when you start the resource and keep it there.",
       "LaunchMultipleSessions": "Launch Multiple Sessions",
       "LaunchMultipleSessionsDescription": "Start several sessions with the identical configuration in one go. Each session is created independently with the resources shown below.",

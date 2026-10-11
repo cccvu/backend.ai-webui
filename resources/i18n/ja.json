@@ -2892,6 +2892,8 @@
       "InvalidMountsSelectionWarning": "フォルダーの選択情報は無効です。選択したフォルダーをご覧ください。",
       "InvalidPortFormat": "ポート番号の形式が正しくない。",
       "Launch": "ローンチ",
+      "LaunchBlocked": "セッションは開始されませんでした",
+      "LaunchCheckFailed": "起動前のチェックが失敗したか応答しなかったため、セッションは開始されませんでした。もう一度お試しください。",
       "LaunchConfirmationDialog": "コードとデータを保持したり、他の共同編集者と共有したりするには、データとストレージのサイドバーにストレージフォルダーを作成し、リソースの起動時にそのフォルダーをマウントして保持します。",
       "LaunchMultipleSessions": "複数セッションを起動",
       "LaunchMultipleSessionsDescription": "同一の設定で複数のセッションを一度に起動します。各セッションは以下に表示されたリソースで独立して作成されます。",

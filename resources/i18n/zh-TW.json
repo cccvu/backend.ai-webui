@@ -2894,6 +2894,8 @@
       "InvalidMountsSelectionWarning": "文件夾選擇信息無效。請再次檢查選定的文件夾。",
       "InvalidPortFormat": "端口号格式不正确。",
       "Launch": "發射",
+      "LaunchBlocked": "工作階段未啟動",
+      "LaunchCheckFailed": "啟動前檢查失敗或無回應，因此未啟動任何工作階段。請再試一次。",
       "LaunchConfirmationDialog": "要保留您的代碼和數據，或與其他協作者共享，只需在數據和存儲側欄中創建一個存儲文件夾，然後在啟動資源時掛載該文件夾並將其保留在那裡。",
       "LaunchMultipleSessions": "啟動多個會話",
       "LaunchMultipleSessionsDescription": "一次以相同設定啟動多個會話。每個會話使用下方顯示的資源獨立建立。",

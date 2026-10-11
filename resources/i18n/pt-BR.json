@@ -2890,6 +2890,8 @@
       "InvalidMountsSelectionWarning": "As informações de seleção de pastas não são válidas. Confira a pasta selecionada.",
       "InvalidPortFormat": "O formato do número da porta está incorreto.",
       "Launch": "Lançar",
+      "LaunchBlocked": "A sessão não foi iniciada",
+      "LaunchCheckFailed": "Uma verificação antes do início falhou ou não respondeu, portanto nenhuma sessão foi iniciada. Tente novamente.",
       "LaunchConfirmationDialog": "Para manter seu código e dados, ou compartilhá-los com outros colaboradores, basta criar uma pasta de armazenamento na barra lateral de dados e armazenamento e, em seguida, montar essa pasta quando iniciar o recurso e mantê-la lá.",
       "LaunchMultipleSessions": "Iniciar várias sessões",
       "LaunchMultipleSessionsDescription": "Inicie várias sessões com a mesma configuração de uma vez. Cada sessão é criada de forma independente com os recursos mostrados abaixo.",

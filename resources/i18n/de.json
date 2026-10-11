@@ -2892,6 +2892,8 @@
       "InvalidMountsSelectionWarning": "Ordnerauswahlinformationen sind nicht gültig. Schauen Sie sich den ausgewählten Ordner an.",
       "InvalidPortFormat": "Das Format der Anschlussnummer ist falsch.",
       "Launch": "Starten",
+      "LaunchBlocked": "Sitzung nicht gestartet",
+      "LaunchCheckFailed": "Eine Startprüfung ist fehlgeschlagen oder hat nicht geantwortet, daher wurde keine Sitzung gestartet. Bitte versuchen Sie es erneut.",
       "LaunchConfirmationDialog": "Um Ihren Code und Ihre Daten zu behalten oder mit anderen Mitarbeitern zu teilen, erstellen Sie einfach einen Speicherordner in der Daten- und Speicherseitenleiste, mounten Sie diesen Ordner, wenn Sie die Ressource starten, und behalten Sie ihn dort bei.",
       "LaunchMultipleSessions": "Mehrere Sitzungen starten",
       "LaunchMultipleSessionsDescription": "Starten Sie mehrere Sitzungen mit identischer Konfiguration auf einmal. Jede Sitzung wird unabhängig mit den unten angezeigten Ressourcen erstellt.",

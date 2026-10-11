@@ -2890,6 +2890,8 @@
       "InvalidMountsSelectionWarning": "Le informazioni sulla selezione delle cartelle non sono valide. Dai un'occhiata alla cartella selezionata.",
       "InvalidPortFormat": "Il formato del numero di porta non è corretto.",
       "Launch": "Lanciare",
+      "LaunchBlocked": "Sessione non avviata",
+      "LaunchCheckFailed": "Un controllo prima dell'avvio non è riuscito o non ha risposto, quindi non è stata avviata alcuna sessione. Riprova.",
       "LaunchConfirmationDialog": "Per conservare il codice e i dati o condividerli con altri collaboratori, è sufficiente creare una cartella di archiviazione nella barra laterale di dati e archiviazione, quindi montare quella cartella all'avvio della risorsa e conservarla lì.",
       "LaunchMultipleSessions": "Avvia più sessioni",
       "LaunchMultipleSessionsDescription": "Avvia più sessioni con la stessa configurazione in una volta sola. Ogni sessione viene creata in modo indipendente con le risorse mostrate di seguito.",
