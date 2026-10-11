@@ -46,14 +46,10 @@ import {
 } from '../hooks/useCurrentProject';
 import { useRecentSessionHistory } from '../hooks/useRecentSessionHistory';
 import {
-  SESSION_LAUNCHER_EXTENSION_FIELDS,
-  buildSessionLauncherExtensionContext,
-  sessionLauncherExtensionError,
-  sessionLauncherExtensionOutcome,
+  DISPLAY_ONLY_SESSION_LAUNCHER_EXTENSION_HOST,
   useSessionLauncherExtensions,
 } from '../hooks/useSessionLauncherExtensions';
 import { useStartSession } from '../hooks/useStartSession';
-import type { SessionLauncherExtensionHost } from '../types/sessionLauncherExtension';
 import './SessionLauncherPage.css';
 import {
   DoubleRightOutlined,
@@ -117,6 +113,7 @@ import React, {
   useEffectEvent,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -228,7 +225,6 @@ const SessionLauncherPage = () => {
   const currentUserRole = useCurrentUserRole();
   const [, setCurrentGlobalResourceGroup] = useCurrentResourceGroupState();
   const currentProject = useCurrentProjectValue();
-  const launcherExtensions = useSessionLauncherExtensions();
 
   const { startSession, defaultFormValues, upsertSessionNotification } =
     useStartSession();
@@ -373,52 +369,30 @@ const SessionLauncherPage = () => {
     preserve: true,
   });
 
-  // Launcher extensions (page plugins) see a snapshot of the form; nothing is
-  // watched when no extension is loaded.
-  const extensionFormValues = Form.useWatch(
-    (values) =>
-      launcherExtensions.tags.length > 0
-        ? _.pick(values, SESSION_LAUNCHER_EXTENSION_FIELDS)
+  // Launcher extensions (page plugins): the accelerator types they may request
+  // are the ones the accelerator selector offers for the resource group.
+  const extensionResourceGroup = Form.useWatch('resourceGroup', {
+    form,
+    preserve: true,
+  });
+  const { resourceSlotsInRG: extensionSlotsInRG } = useResourceSlotsDetails(
+    extensionResourceGroup || undefined,
+  );
+  const extensionAcceleratorTypes = useMemo(
+    () =>
+      extensionSlotsInRG
+        ? _.without(_.keys(extensionSlotsInRG), 'cpu', 'mem', 'shmem')
         : undefined,
-    { form, preserve: true },
+    [extensionSlotsInRG],
   );
-  const extensionContexts = useMemo(
-    () => ({
-      resource: buildSessionLauncherExtensionContext(
-        extensionFormValues,
-        currentProject,
-        'resource',
-      ),
-      review: buildSessionLauncherExtensionContext(
-        extensionFormValues,
-        currentProject,
-        'review',
-      ),
-    }),
-    [extensionFormValues, currentProject],
-  );
-  const extensionHost: SessionLauncherExtensionHost = useMemo(
-    () => ({
-      setAcceleratorRequest: ({ acceleratorType, accelerator }) => {
-        if (
-          !baiClient._config.allowCustomResourceAllocation ||
-          typeof acceleratorType !== 'string' ||
-          !acceleratorType ||
-          !Number.isFinite(accelerator) ||
-          accelerator < 0
-        ) {
-          return false;
-        }
-        form.setFieldsValue({
-          allocationPreset: 'custom',
-          resource: { acceleratorType, accelerator },
-        });
-        form.validateFields(['resource'], { recursive: true }).catch(() => {});
-        return true;
-      },
-    }),
-    [baiClient, form],
-  );
+  const launcherExtensions = useSessionLauncherExtensions(form, {
+    currentProject,
+    allowCustomResourceAllocation:
+      !!baiClient._config.allowCustomResourceAllocation,
+    offeredAcceleratorTypes: extensionAcceleratorTypes,
+  });
+  const launchInFlightRef = useRef(false);
+  const [isLaunching, setIsLaunching] = useState(false);
 
   const steps: Array<StepPropsWithKey> = filterOutEmpty([
     {
@@ -494,7 +468,21 @@ const SessionLauncherPage = () => {
     }
   }, [isQueryReset, form]);
 
+  // One launch at a time: launcher extensions may take a while to answer, and
+  // the multi-session path has no button of its own to show it.
   const performLaunch = async (numOfSessions: number) => {
+    if (launchInFlightRef.current) return;
+    launchInFlightRef.current = true;
+    setIsLaunching(true);
+    try {
+      await launchSessions(numOfSessions);
+    } finally {
+      launchInFlightRef.current = false;
+      setIsLaunching(false);
+    }
+  };
+
+  const launchSessions = async (numOfSessions: number) => {
     const usedSearchParams = search;
     const values = await form.validateFields().catch((e) => {
       logger.error('validation errors', e);
@@ -527,26 +515,20 @@ const SessionLauncherPage = () => {
 
     // Launcher extensions run after the form is final and before any session
     // request is sent; any of them may stop the launch.
-    const extensionGate = await launcherExtensions.runBeforeLaunch({
-      context: buildSessionLauncherExtensionContext(
-        values,
-        currentProject,
-        'resource',
-      ),
-      numOfSessions,
-    });
-    if (!extensionGate.ok) {
-      app.modal.error({
-        title: t('session.launcher.LaunchBlocked'),
-        content:
-          extensionGate.message ?? t('session.launcher.LaunchCheckFailed'),
-      });
-      return;
-    }
-
-    await startSession({ ...values, num_of_sessions: numOfSessions })
-      .then((results) => {
-        extensionGate.afterLaunch(sessionLauncherExtensionOutcome(results));
+    await launcherExtensions
+      .launch(values, numOfSessions, () =>
+        startSession({ ...values, num_of_sessions: numOfSessions }),
+      )
+      .then((launched) => {
+        if (!launched.ok) {
+          app.modal.error({
+            title: t('session.launcher.LaunchBlocked'),
+            content:
+              launched.message ?? t('session.launcher.LaunchCheckFailed'),
+          });
+          return;
+        }
+        const results = launched.results;
         // After sending a create request, navigate to job page and set current resource group
         if (results?.fulfilled && results.fulfilled.length > 0) {
           // Do not await here to speed up the navigation
@@ -588,11 +570,6 @@ const SessionLauncherPage = () => {
         }
       })
       .catch((error) => {
-        extensionGate.afterLaunch({
-          status: 'failed',
-          sessions: [],
-          errors: [sessionLauncherExtensionError(error)],
-        });
         // Unexpected error in `then` of allSettled
         logger.error('Unexpected error during session creation:', error);
         app.message.error(t('error.UnexpectedError'));
@@ -1136,8 +1113,8 @@ const SessionLauncherPage = () => {
                   />
                   <SessionLauncherExtensionSlot
                     tags={launcherExtensions.tags}
-                    context={extensionContexts.resource}
-                    host={extensionHost}
+                    context={launcherExtensions.contexts.resource}
+                    host={launcherExtensions.host}
                     register={launcherExtensions.register}
                   />
                 </Card>
@@ -1321,8 +1298,8 @@ const SessionLauncherPage = () => {
                     resourceExtensionSlot={
                       <SessionLauncherExtensionSlot
                         tags={launcherExtensions.tags}
-                        context={extensionContexts.review}
-                        host={extensionHost}
+                        context={launcherExtensions.contexts.review}
+                        host={DISPLAY_ONLY_SESSION_LAUNCHER_EXTENSION_HOST}
                       />
                     }
                   />
@@ -1402,13 +1379,14 @@ const SessionLauncherPage = () => {
                             type="primary"
                             icon={<PlayCircleOutlined />}
                             disabled={hasError}
+                            loading={isLaunching}
                             action={() => performLaunch(1)}
                           >
                             {t('session.launcher.Launch')}
                           </BAIButton>
                           <Dropdown
                             trigger={['click']}
-                            disabled={hasError}
+                            disabled={hasError || isLaunching}
                             menu={{
                               items: [
                                 {
@@ -1426,7 +1404,7 @@ const SessionLauncherPage = () => {
                             <BAIButton
                               type="primary"
                               icon={<EllipsisOutlined />}
-                              disabled={hasError}
+                              disabled={hasError || isLaunching}
                             />
                           </Dropdown>
                         </Space.Compact>

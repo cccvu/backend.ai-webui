@@ -20,20 +20,30 @@
  * The named element must be defined by the time the plugin module finishes
  * loading. PluginLoader records the tag; the launcher then mounts one
  * instance in the Resource Allocation card (`placement: 'resource'`) and one
- * on the review step (`placement: 'review'`, display only).
+ * on the review step (`placement: 'review'`, display only: its `host` refuses
+ * every change). The two instances share no state.
  *
  * The launcher sets `host` and `context` as properties on each instance and
  * replaces `context` with a new object whenever the form changes. Only the
  * `resource` instance's `beforeLaunch` and `afterLaunch` are called.
  *
- * Fail-safe rules:
- * - A tag that is invalid or not defined is ignored, and an element that
- *   fails to mount renders nothing: the launcher works as it does without
- *   extensions.
- * - A `beforeLaunch` that the element implements is fail-closed: a veto, a
- *   throw or no answer within `SESSION_LAUNCHER_EXTENSION_TIMEOUT_MS` stops
- *   the launch before any session request is sent.
+ * Failure rules:
+ * - A tag that is invalid or not defined is ignored, and an element without
+ *   `beforeLaunch` that fails to mount renders nothing: the launcher works as
+ *   it does without extensions.
+ * - `beforeLaunch` is fail-closed. A veto, a throw, a rejection or no answer
+ *   within `SESSION_LAUNCHER_EXTENSION_TIMEOUT_MS` stops the launch before
+ *   any session request is sent; `signal` is aborted on the timeout. The
+ *   launch is also stopped while page plugins are still loading, and when an
+ *   extension whose class defines `beforeLaunch` (as a class method) is not
+ *   mounted, for example because it failed to mount.
  * - `afterLaunch` is never awaited and its errors are ignored.
+ *
+ * `beforeLaunch` is a check in this launcher only, not an enforcement point:
+ * other ways of creating sessions (other WebUI dialogs, the API, the CLI) do
+ * not run it. Anything that must hold for every session needs a check on the
+ * server. Every page plugin's extension is mounted for every user who opens
+ * the launcher, whatever the plugin's menu permission.
  *
  * Every launch that reaches the extensions (form valid and confirmed) calls
  * each `resource` instance's `afterLaunch` exactly once: with `aborted` when
@@ -66,14 +76,25 @@ export interface SessionLauncherExtensionContext {
   onBehalfOfAnotherUser: boolean;
   /** True when a batch session is scheduled to start at a later time. */
   scheduled: boolean;
+  /**
+   * `size` containers. A multi-node request for one container is sent as
+   * single-node, and reported so.
+   */
   cluster: { mode: 'single-node' | 'multi-node'; size: number };
+  /**
+   * The resources of each container: a session requests `cluster.size` times
+   * these.
+   */
   resource: {
     cpu: number | null;
     mem: string | null;
     shmem: string | null;
     /** The accelerator slot name, for example `cuda.device`. */
     acceleratorType: string | null;
-    /** The number of accelerators requested per session; 0 for none. */
+    /**
+     * The accelerator quantity sent for each container; 0 when none is sent,
+     * which includes unified-memory slots (`*.unified`).
+     */
     accelerator: number;
   };
 }
@@ -81,9 +102,13 @@ export interface SessionLauncherExtensionContext {
 /** Changes an extension may ask the launcher to apply to the form. */
 export interface SessionLauncherExtensionHost {
   /**
-   * Sets the accelerator request and switches the resource preset to
-   * "custom". Returns false and changes nothing when custom allocation is not
-   * allowed in this deployment. The form validates the new values as usual.
+   * Sets the accelerator request (per container) and switches the resource
+   * preset to "custom". Returns false and changes nothing when custom
+   * allocation is not allowed in this deployment, when the type is not one
+   * the selected resource group offers or is a unified-memory slot, or when
+   * the quantity is not a finite number of at least 0. The form validates the
+   * new values as usual. A change made while `beforeLaunch` runs does not
+   * affect that launch.
    */
   setAcceleratorRequest(request: {
     acceleratorType: string;
@@ -96,7 +121,7 @@ export interface SessionLauncherExtensionLaunch {
   context: SessionLauncherExtensionContext;
   /** How many sessions this launch creates (more than 1 for multi-launch). */
   numOfSessions: number;
-  /** Aborted when the launcher stops waiting for this extension. */
+  /** Aborted when the launcher stops waiting for this extension (timeout). */
   signal: AbortSignal;
 }
 

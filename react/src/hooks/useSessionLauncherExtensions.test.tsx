@@ -7,14 +7,22 @@ import type {
   SessionLauncherExtensionLaunch,
 } from '../types/sessionLauncherExtension';
 import {
+  DISPLAY_ONLY_SESSION_LAUNCHER_EXTENSION_HOST,
   buildSessionLauncherExtensionContext,
+  createSessionLauncherExtensionHost,
+  declaresBeforeLaunch,
+  launchThroughSessionLauncherExtensions,
   readSessionLauncherExtensionTag,
+  runSessionLauncherExtensionGate,
   runSessionLauncherExtensions,
   sessionLauncherExtensionOutcome,
   sessionLauncherExtensionTagsState,
   useSessionLauncherExtensions,
 } from './useSessionLauncherExtensions';
+import type { StartSessionResults } from './useStartSession';
+import { pluginLoadedState } from './useWebUIPluginState';
 import { renderHook } from '@testing-library/react';
+import { Form } from 'antd';
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -152,6 +160,57 @@ describe('buildSessionLauncherExtensionContext', () => {
       'resource',
     );
     expect(context.scheduled).toBe(true);
+  });
+
+  it('reports multi-node with one container as single-node, as the request does', () => {
+    const one = buildSessionLauncherExtensionContext(
+      { cluster_mode: 'multi-node', cluster_size: 1 },
+      project,
+      'resource',
+    );
+    expect(one.cluster).toEqual({ mode: 'single-node', size: 1 });
+    const two = buildSessionLauncherExtensionContext(
+      { cluster_mode: 'multi-node', cluster_size: 2 },
+      project,
+      'resource',
+    );
+    expect(two.cluster).toEqual({ mode: 'multi-node', size: 2 });
+  });
+
+  it.each([
+    ['a unified-memory slot', 'cuda.unified', 2],
+    ['no accelerator type', undefined, 2],
+    ['an empty accelerator type', '', 2],
+    ['a negative quantity', 'cuda.device', -1],
+  ])(
+    'reports no accelerator quantity for %s, as the request sends none',
+    (_name, acceleratorType, accelerator) => {
+      const context = buildSessionLauncherExtensionContext(
+        { resource: { acceleratorType, accelerator } },
+        project,
+        'resource',
+      );
+      expect(context.resource.accelerator).toBe(0);
+      expect(context.resource.acceleratorType).toBe(acceleratorType || null);
+    },
+  );
+
+  it('keeps a fractional accelerator quantity', () => {
+    const context = buildSessionLauncherExtensionContext(
+      { resource: { acceleratorType: 'cuda.shares', accelerator: 0.5 } },
+      project,
+      'resource',
+    );
+    expect(context.resource.accelerator).toBe(0.5);
+  });
+
+  it('marks a batch session with no schedule date as not scheduled', () => {
+    const context = buildSessionLauncherExtensionContext(
+      { sessionType: 'batch', batch: { enabled: true } },
+      project,
+      'resource',
+    );
+    expect(context.scheduled).toBe(false);
   });
 
   it('has defaults before the form is ready', () => {
@@ -398,21 +457,272 @@ describe('runSessionLauncherExtensions', () => {
   });
 });
 
-describe('useSessionLauncherExtensions', () => {
+describe('declaresBeforeLaunch', () => {
+  it('is true only for a class that defines beforeLaunch as a method', () => {
+    class WithCheck {
+      beforeLaunch() {}
+    }
+    class WithoutCheck {}
+    const registry = registryOf({
+      'ext-check': WithCheck,
+      'ext-plain': WithoutCheck,
+    });
+    expect(declaresBeforeLaunch('ext-check', registry)).toBe(true);
+    expect(declaresBeforeLaunch('ext-plain', registry)).toBe(false);
+    expect(declaresBeforeLaunch('ext-missing', registry)).toBe(false);
+  });
+});
+
+describe('runSessionLauncherExtensionGate', () => {
   const context = buildSessionLauncherExtensionContext(
     undefined,
     { id: 'p', name: 'project' },
     'resource',
   );
+  const launch = { context, numOfSessions: 1 };
+  class WithCheck {
+    beforeLaunch() {}
+  }
+  class WithoutCheck {}
+  const registry = registryOf({
+    'ext-check': WithCheck,
+    'ext-plain': WithoutCheck,
+  });
+  const mountedElement = () =>
+    Object.assign(document.createElement('div'), {
+      beforeLaunch: vi.fn(),
+      afterLaunch: vi.fn(),
+    });
 
-  const renderRegistry = (tags: string[]) => {
+  it('refuses while page plugins are still loading, before asking anyone', async () => {
+    const element = mountedElement();
+    const logger = { warn: vi.fn() };
+    const gate = await runSessionLauncherExtensionGate(
+      {
+        pluginsLoaded: false,
+        tags: [],
+        mounted: new Map([['ext-check', element]]),
+        launch,
+        logger,
+      },
+      registry,
+    );
+    expect(gate).toEqual({ ok: false });
+    expect(element.beforeLaunch).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses when an extension with a launch check is not mounted', async () => {
+    const plain = mountedElement();
+    const logger = { warn: vi.fn() };
+    const gate = await runSessionLauncherExtensionGate(
+      {
+        pluginsLoaded: true,
+        tags: ['ext-plain', 'ext-check'],
+        mounted: new Map([['ext-plain', plain]]),
+        launch,
+        logger,
+      },
+      registry,
+    );
+    expect(gate).toEqual({ ok: false });
+    expect(plain.beforeLaunch).not.toHaveBeenCalled();
+    // Every mounted extension still hears that the launch was stopped.
+    expect(plain.afterLaunch).toHaveBeenCalledWith({
+      status: 'aborted',
+      sessions: [],
+      errors: [],
+    });
+  });
+
+  it('lets the launch through when only an extension without a check is not mounted', async () => {
+    const check = mountedElement();
+    const gate = await runSessionLauncherExtensionGate(
+      {
+        pluginsLoaded: true,
+        tags: ['ext-plain', 'ext-check'],
+        mounted: new Map([['ext-check', check]]),
+        launch,
+        logger: { warn: vi.fn() },
+      },
+      registry,
+    );
+    expect(gate.ok).toBe(true);
+    expect(check.beforeLaunch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('launchThroughSessionLauncherExtensions', () => {
+  const results = {
+    fulfilled: [
+      {
+        status: 'fulfilled' as const,
+        value: { sessionId: 'id-1', sessionName: 's-1' },
+      },
+    ],
+    rejected: [],
+  } as unknown as StartSessionResults;
+
+  it('never starts a session when the check refuses', async () => {
+    const start = vi.fn(async () => results);
+    const launched = await launchThroughSessionLauncherExtensions(
+      async () => ({ ok: false, message: 'not now' }),
+      start,
+    );
+    expect(launched).toEqual({ ok: false, message: 'not now' });
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('starts only after the check passed, then reports the outcome once', async () => {
+    const order: string[] = [];
+    const afterLaunch = vi.fn(() => order.push('after'));
+    const launched = await launchThroughSessionLauncherExtensions(
+      async () => {
+        order.push('check');
+        return { ok: true, afterLaunch };
+      },
+      async () => {
+        order.push('start');
+        return results;
+      },
+    );
+    expect(launched).toEqual({ ok: true, results });
+    expect(order).toEqual(['check', 'start', 'after']);
+    expect(afterLaunch).toHaveBeenCalledWith(
+      sessionLauncherExtensionOutcome(results),
+    );
+  });
+
+  it('reports a failed start and rethrows it', async () => {
+    const afterLaunch = vi.fn();
+    const error = Object.assign(new Error('boom'), { error_code: 'x_y' });
+    await expect(
+      launchThroughSessionLauncherExtensions(
+        async () => ({ ok: true, afterLaunch }),
+        async () => {
+          throw error;
+        },
+      ),
+    ).rejects.toBe(error);
+    expect(afterLaunch).toHaveBeenCalledTimes(1);
+    expect(afterLaunch).toHaveBeenCalledWith({
+      status: 'failed',
+      sessions: [],
+      errors: [{ code: 'x_y', message: 'boom' }],
+    });
+  });
+});
+
+describe('createSessionLauncherExtensionHost', () => {
+  const makeForm = () => ({
+    setFieldsValue: vi.fn(),
+    validateFields: vi.fn(() => Promise.resolve({})),
+  });
+  const offered = ['cuda.device', 'cuda.shares', 'cuda.unified'];
+
+  it('sets the request, switches to custom and revalidates', () => {
+    const form = makeForm();
+    const host = createSessionLauncherExtensionHost(form, {
+      allowCustomResourceAllocation: true,
+      offeredAcceleratorTypes: offered,
+    });
+    expect(
+      host.setAcceleratorRequest({
+        acceleratorType: 'cuda.device',
+        accelerator: 2,
+      }),
+    ).toBe(true);
+    expect(form.setFieldsValue).toHaveBeenCalledWith({
+      allocationPreset: 'custom',
+      resource: { acceleratorType: 'cuda.device', accelerator: 2 },
+    });
+    expect(form.validateFields).toHaveBeenCalledWith(['resource'], {
+      recursive: true,
+    });
+  });
+
+  it.each([0, 0.5])('accepts a quantity of %s', (accelerator) => {
+    const host = createSessionLauncherExtensionHost(makeForm(), {
+      allowCustomResourceAllocation: true,
+      offeredAcceleratorTypes: offered,
+    });
+    expect(
+      host.setAcceleratorRequest({
+        acceleratorType: 'cuda.shares',
+        accelerator,
+      }),
+    ).toBe(true);
+  });
+
+  it.each<[string, boolean, string[] | undefined, unknown, unknown]>([
+    ['custom allocation is disabled', false, offered, 'cuda.device', 1],
+    [
+      'the resource group slots are not loaded',
+      true,
+      undefined,
+      'cuda.device',
+      1,
+    ],
+    ['the type is not offered', true, offered, 'rocm.device', 1],
+    ['the type is cpu', true, offered, 'cpu', 1],
+    ['the type is a unified-memory slot', true, offered, 'cuda.unified', 1],
+    ['the type is empty', true, offered, '', 1],
+    ['the type is not a string', true, offered, 1, 1],
+    ['the quantity is negative', true, offered, 'cuda.device', -1],
+    ['the quantity is NaN', true, offered, 'cuda.device', NaN],
+    ['the quantity is infinite', true, offered, 'cuda.device', Infinity],
+    ['the quantity is a string', true, offered, 'cuda.device', '2'],
+  ])(
+    'refuses and changes nothing when %s',
+    (_name, allowCustom, offeredTypes, acceleratorType, accelerator) => {
+      const form = makeForm();
+      const host = createSessionLauncherExtensionHost(form, {
+        allowCustomResourceAllocation: allowCustom,
+        offeredAcceleratorTypes: offeredTypes,
+      });
+      expect(
+        host.setAcceleratorRequest({
+          acceleratorType,
+          accelerator,
+        } as unknown as { acceleratorType: string; accelerator: number }),
+      ).toBe(false);
+      expect(form.setFieldsValue).not.toHaveBeenCalled();
+      expect(form.validateFields).not.toHaveBeenCalled();
+    },
+  );
+
+  it('gives the display-only instance a host that refuses', () => {
+    expect(
+      DISPLAY_ONLY_SESSION_LAUNCHER_EXTENSION_HOST.setAcceleratorRequest({
+        acceleratorType: 'cuda.device',
+        accelerator: 1,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('useSessionLauncherExtensions', () => {
+  const values = { resourceGroup: 'group-a' };
+
+  const renderRegistry = (tags: string[], pluginsLoaded = true) => {
     const store = createStore();
     store.set(sessionLauncherExtensionTagsState, tags);
-    return renderHook(() => useSessionLauncherExtensions(), {
-      wrapper: ({ children }) => (
-        <JotaiProvider store={store}>{children}</JotaiProvider>
-      ),
-    });
+    store.set(pluginLoadedState, pluginsLoaded);
+    return renderHook(
+      () => {
+        const [form] = Form.useForm();
+        return useSessionLauncherExtensions(form, {
+          currentProject: { id: 'p', name: 'project' },
+          allowCustomResourceAllocation: true,
+          offeredAcceleratorTypes: ['cuda.device'],
+        });
+      },
+      {
+        wrapper: ({ children }) => (
+          <JotaiProvider store={store}>{children}</JotaiProvider>
+        ),
+      },
+    );
   };
 
   it('runs only mounted extensions, in plugin order', async () => {
@@ -424,13 +734,11 @@ describe('useSessionLauncherExtensions', () => {
           calls.push(name);
         },
       });
-    // Registered out of order; ext-b is never mounted.
+    // Registered out of order; ext-b is never mounted (and is not defined,
+    // so it declares no launch check).
     result.current.register('ext-c', element('c'));
     result.current.register('ext-a', element('a'));
-    const gate = await result.current.runBeforeLaunch({
-      context,
-      numOfSessions: 1,
-    });
+    const gate = await result.current.runBeforeLaunch(values, 1);
     expect(gate.ok).toBe(true);
     expect(calls).toEqual(['a', 'c']);
   });
@@ -443,11 +751,36 @@ describe('useSessionLauncherExtensions', () => {
       Object.assign(document.createElement('div'), { beforeLaunch }),
     );
     unregister();
-    const gate = await result.current.runBeforeLaunch({
-      context,
-      numOfSessions: 1,
-    });
+    const gate = await result.current.runBeforeLaunch(values, 1);
     expect(gate.ok).toBe(true);
     expect(beforeLaunch).not.toHaveBeenCalled();
+  });
+
+  it('refuses a launch while page plugins are still loading', async () => {
+    const { result } = renderRegistry([], false);
+    const start = vi.fn();
+    const launched = await result.current.launch(values, 1, start);
+    expect(launched.ok).toBe(false);
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('builds the launch context from the values it is given', async () => {
+    const { result } = renderRegistry(['ext-a']);
+    const beforeLaunch = vi.fn();
+    result.current.register(
+      'ext-a',
+      Object.assign(document.createElement('div'), { beforeLaunch }),
+    );
+    await result.current.runBeforeLaunch(values, 3);
+    expect(beforeLaunch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        numOfSessions: 3,
+        context: expect.objectContaining({
+          placement: 'resource',
+          resourceGroup: 'group-a',
+          project: { id: 'p', name: 'project' },
+        }),
+      }),
+    );
   });
 });
