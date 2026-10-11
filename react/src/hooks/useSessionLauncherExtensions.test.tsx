@@ -463,11 +463,17 @@ describe('declaresBeforeLaunch', () => {
       beforeLaunch() {}
     }
     class WithoutCheck {}
+    // A class field is set per instance, so it cannot be seen without one.
+    class WithFieldCheck {
+      beforeLaunch = () => {};
+    }
     const registry = registryOf({
       'ext-check': WithCheck,
       'ext-plain': WithoutCheck,
+      'ext-field': WithFieldCheck,
     });
     expect(declaresBeforeLaunch('ext-check', registry)).toBe(true);
+    expect(declaresBeforeLaunch('ext-field', registry)).toBe(false);
     expect(declaresBeforeLaunch('ext-plain', registry)).toBe(false);
     expect(declaresBeforeLaunch('ext-missing', registry)).toBe(false);
   });

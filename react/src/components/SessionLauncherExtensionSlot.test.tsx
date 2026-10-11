@@ -138,17 +138,27 @@ describe('SessionLauncherExtensionSlot', () => {
     }
     // createElement reports a throwing constructor as a window error and
     // returns an inert element instead of throwing.
+    // The inert element is neither mounted nor registered, so a launch check
+    // its class declares fails closed (see runSessionLauncherExtensionGate).
     const reported = vi.fn((event: ErrorEvent) => event.preventDefault());
     window.addEventListener('error', reported);
     try {
+      const register = vi.fn(() => () => {});
       const { container } = render(
         <SessionLauncherExtensionSlot
           tags={['slot-exploding-extension', 'slot-test-extension']}
           context={contextFor('a')}
           host={host}
+          register={register}
         />,
       );
       expect(mounted(container, 'slot-test-extension')).not.toBeNull();
+      expect(mounted(container, 'slot-exploding-extension')).toBeNull();
+      expect(register).toHaveBeenCalledTimes(1);
+      expect(register).toHaveBeenCalledWith(
+        'slot-test-extension',
+        expect.anything(),
+      );
       expect(reported).toHaveBeenCalled();
     } finally {
       window.removeEventListener('error', reported);

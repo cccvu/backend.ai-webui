@@ -24,7 +24,8 @@
  * every change). The two instances share no state.
  *
  * The launcher sets `host` and `context` as properties on each instance and
- * replaces `context` with a new object whenever the form changes. Only the
+ * replaces `context` with a new object whenever the form changes (the first
+ * one may reflect the form's defaults). Only the
  * `resource` instance's `beforeLaunch` and `afterLaunch` are called.
  *
  * Failure rules:
@@ -35,8 +36,11 @@
  *   within `SESSION_LAUNCHER_EXTENSION_TIMEOUT_MS` stops the launch before
  *   any session request is sent; `signal` is aborted on the timeout. The
  *   launch is also stopped while page plugins are still loading, and when an
- *   extension whose class defines `beforeLaunch` (as a class method) is not
- *   mounted, for example because it failed to mount.
+ *   extension whose class defines `beforeLaunch` is not mounted, for example
+ *   because its constructor or a property setter threw. Define `beforeLaunch`
+ *   as a class method, not a class field: only a method can be seen on the
+ *   class of an element that failed to mount. A plugin whose module fails to
+ *   load declares nothing, so its extension is not known to the launcher.
  * - `afterLaunch` is never awaited and its errors are ignored.
  *
  * `beforeLaunch` is a check in this launcher only, not an enforcement point:
@@ -105,7 +109,8 @@ export interface SessionLauncherExtensionHost {
    * Sets the accelerator request (per container) and switches the resource
    * preset to "custom". Returns false and changes nothing when custom
    * allocation is not allowed in this deployment, when the type is not one
-   * the selected resource group offers or is a unified-memory slot, or when
+   * of the selected resource group's accelerator slots or is a unified-memory
+   * slot, or when
    * the quantity is not a finite number of at least 0. The form validates the
    * new values as usual. A change made while `beforeLaunch` runs does not
    * affect that launch.

@@ -58,6 +58,14 @@ const ExtensionElement: React.FC<
     let element: SessionLauncherExtensionElement;
     try {
       element = document.createElement(tag) as SessionLauncherExtensionElement;
+      // A constructor that throws is reported as a window error, and
+      // createElement returns an inert element instead: never mount or
+      // register that, so a launch check it declares fails closed.
+      const elementClass = customElements.get(tag);
+      if (!elementClass || !(element instanceof elementClass)) {
+        logger.warn(`Launcher extension "${tag}" failed to construct`);
+        return;
+      }
       element.host = host;
       element.context = context;
       container.appendChild(element);

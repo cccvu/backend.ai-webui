@@ -355,9 +355,9 @@ export const runSessionLauncherExtensionGate = (
 /**
  * Builds the `host` an extension uses to change the launcher form. The
  * accelerator request is applied only when custom allocation is allowed and
- * the type is one the selected resource group offers (the same choices as the
- * accelerator selector), never a unified-memory slot, whose quantity is not
- * sent.
+ * the type is one of the selected resource group's accelerator slots, never a
+ * unified-memory slot, whose quantity is not sent. Whether the image supports
+ * the type is left to the form's validation, as for any other change.
  */
 export const createSessionLauncherExtensionHost = (
   form: Pick<FormInstance, 'setFieldsValue' | 'validateFields'>,
