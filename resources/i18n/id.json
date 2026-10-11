@@ -2894,6 +2894,8 @@
       "InvalidMountsSelectionWarning": "Informasi pemilihan folder tidak valid. Lihat folder yang dipilih.",
       "InvalidPortFormat": "Format nomor port salah.",
       "Launch": "Luncurkan",
+      "LaunchBlocked": "Sesi tidak dimulai",
+      "LaunchCheckFailed": "Pemeriksaan sebelum peluncuran gagal atau tidak merespons, sehingga tidak ada sesi yang dimulai. Silakan coba lagi.",
       "LaunchConfirmationDialog": "Untuk menyimpan kode dan data Anda, atau membagikannya dengan kolaborator lain, cukup buat folder penyimpanan di bilah sisi Data & Penyimpanan, lalu pasang folder itu saat Anda memulai sumber daya dan simpan di sana.",
       "LaunchMultipleSessions": "Mulai Beberapa Sesi",
       "LaunchMultipleSessionsDescription": "Mulai beberapa sesi dengan konfigurasi yang sama sekaligus. Setiap sesi dibuat secara independen dengan sumber daya yang ditampilkan di bawah ini.",

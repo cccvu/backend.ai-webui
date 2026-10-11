@@ -21,6 +21,7 @@ import ResourceAllocationFormItems, {
   isUnifiedAcceleratorSlot,
 } from '../components/SessionFormItems/ResourceAllocationFormItems';
 import SessionLauncherValidationTour from '../components/SessionLauncherErrorTourProps';
+import SessionLauncherExtensionSlot from '../components/SessionLauncherExtensionSlot';
 import SessionLauncherFormIncompatibleValueChecker from '../components/SessionLauncherFormIncompatibleValueChecker';
 import SessionLauncherPreview from '../components/SessionLauncherPreview';
 import SessionNameFormItem, {
@@ -39,9 +40,20 @@ import {
   useCurrentUserRole,
   useResourceSlotsDetails,
 } from '../hooks/backendai';
-import { useCurrentResourceGroupState } from '../hooks/useCurrentProject';
+import {
+  useCurrentProjectValue,
+  useCurrentResourceGroupState,
+} from '../hooks/useCurrentProject';
 import { useRecentSessionHistory } from '../hooks/useRecentSessionHistory';
+import {
+  SESSION_LAUNCHER_EXTENSION_FIELDS,
+  buildSessionLauncherExtensionContext,
+  sessionLauncherExtensionError,
+  sessionLauncherExtensionOutcome,
+  useSessionLauncherExtensions,
+} from '../hooks/useSessionLauncherExtensions';
 import { useStartSession } from '../hooks/useStartSession';
+import type { SessionLauncherExtensionHost } from '../types/sessionLauncherExtension';
 import './SessionLauncherPage.css';
 import {
   DoubleRightOutlined,
@@ -215,6 +227,8 @@ const SessionLauncherPage = () => {
   const supportBatchTimeout = baiClient?.supports('batch-timeout') ?? false;
   const currentUserRole = useCurrentUserRole();
   const [, setCurrentGlobalResourceGroup] = useCurrentResourceGroupState();
+  const currentProject = useCurrentProjectValue();
+  const launcherExtensions = useSessionLauncherExtensions();
 
   const { startSession, defaultFormValues, upsertSessionNotification } =
     useStartSession();
@@ -359,6 +373,53 @@ const SessionLauncherPage = () => {
     preserve: true,
   });
 
+  // Launcher extensions (page plugins) see a snapshot of the form; nothing is
+  // watched when no extension is loaded.
+  const extensionFormValues = Form.useWatch(
+    (values) =>
+      launcherExtensions.tags.length > 0
+        ? _.pick(values, SESSION_LAUNCHER_EXTENSION_FIELDS)
+        : undefined,
+    { form, preserve: true },
+  );
+  const extensionContexts = useMemo(
+    () => ({
+      resource: buildSessionLauncherExtensionContext(
+        extensionFormValues,
+        currentProject,
+        'resource',
+      ),
+      review: buildSessionLauncherExtensionContext(
+        extensionFormValues,
+        currentProject,
+        'review',
+      ),
+    }),
+    [extensionFormValues, currentProject],
+  );
+  const extensionHost: SessionLauncherExtensionHost = useMemo(
+    () => ({
+      setAcceleratorRequest: ({ acceleratorType, accelerator }) => {
+        if (
+          !baiClient._config.allowCustomResourceAllocation ||
+          typeof acceleratorType !== 'string' ||
+          !acceleratorType ||
+          !Number.isFinite(accelerator) ||
+          accelerator < 0
+        ) {
+          return false;
+        }
+        form.setFieldsValue({
+          allocationPreset: 'custom',
+          resource: { acceleratorType, accelerator },
+        });
+        form.validateFields(['resource'], { recursive: true }).catch(() => {});
+        return true;
+      },
+    }),
+    [baiClient, form],
+  );
+
   const steps: Array<StepPropsWithKey> = filterOutEmpty([
     {
       title: t('session.launcher.SessionType'),
@@ -464,8 +525,28 @@ const SessionLauncherPage = () => {
       if (!isConfirmed) return;
     }
 
+    // Launcher extensions run after the form is final and before any session
+    // request is sent; any of them may stop the launch.
+    const extensionGate = await launcherExtensions.runBeforeLaunch({
+      context: buildSessionLauncherExtensionContext(
+        values,
+        currentProject,
+        'resource',
+      ),
+      numOfSessions,
+    });
+    if (!extensionGate.ok) {
+      app.modal.error({
+        title: t('session.launcher.LaunchBlocked'),
+        content:
+          extensionGate.message ?? t('session.launcher.LaunchCheckFailed'),
+      });
+      return;
+    }
+
     await startSession({ ...values, num_of_sessions: numOfSessions })
       .then((results) => {
+        extensionGate.afterLaunch(sessionLauncherExtensionOutcome(results));
         // After sending a create request, navigate to job page and set current resource group
         if (results?.fulfilled && results.fulfilled.length > 0) {
           // Do not await here to speed up the navigation
@@ -507,6 +588,11 @@ const SessionLauncherPage = () => {
         }
       })
       .catch((error) => {
+        extensionGate.afterLaunch({
+          status: 'failed',
+          sessions: [],
+          errors: [sessionLauncherExtensionError(error)],
+        });
         // Unexpected error in `then` of allSettled
         logger.error('Unexpected error during session creation:', error);
         app.message.error(t('error.UnexpectedError'));
@@ -1048,6 +1134,12 @@ const SessionLauncherPage = () => {
                     enableResourcePresets
                     showRemainingWarning
                   />
+                  <SessionLauncherExtensionSlot
+                    tags={launcherExtensions.tags}
+                    context={extensionContexts.resource}
+                    host={extensionHost}
+                    register={launcherExtensions.register}
+                  />
                 </Card>
                 <Card
                   title={t('session.launcher.HPCOptimization')}
@@ -1226,6 +1318,13 @@ const SessionLauncherPage = () => {
                       const nextStep = _.findIndex(steps, { key: stepKey });
                       setCurrentStep(nextStep);
                     }}
+                    resourceExtensionSlot={
+                      <SessionLauncherExtensionSlot
+                        tags={launcherExtensions.tags}
+                        context={extensionContexts.review}
+                        host={extensionHost}
+                      />
+                    }
                   />
                 )}
 

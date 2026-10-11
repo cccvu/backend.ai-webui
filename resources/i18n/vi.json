@@ -2892,6 +2892,8 @@
       "InvalidMountsSelectionWarning": "Thông tin lựa chọn thư mục không hợp lệ. Kiểm tra thư mục đã chọn.",
       "InvalidPortFormat": "Định dạng số cổng không chính xác.",
       "Launch": "Phóng",
+      "LaunchBlocked": "Phiên chưa được khởi chạy",
+      "LaunchCheckFailed": "Một bước kiểm tra trước khi khởi chạy đã thất bại hoặc không phản hồi, nên không có phiên nào được khởi chạy. Vui lòng thử lại.",
       "LaunchConfirmationDialog": "Để giữ mã và dữ liệu của bạn hoặc chia sẻ nó với các cộng tác viên khác, chỉ cần tạo một thư mục lưu trữ trong thanh bên dữ liệu & lưu trữ, sau đó gắn kết thư mục đó khi bạn khởi động tài nguyên và giữ nó ở đó.",
       "LaunchMultipleSessions": "Khởi động nhiều phiên",
       "LaunchMultipleSessionsDescription": "Khởi động nhiều phiên với cùng cấu hình cùng một lúc. Mỗi phiên được tạo độc lập với các tài nguyên hiển thị bên dưới.",

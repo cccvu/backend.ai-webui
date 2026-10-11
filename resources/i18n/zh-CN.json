@@ -2892,6 +2892,8 @@
       "InvalidMountsSelectionWarning": "文件夹选择信息无效。查看选定的文件夹。",
       "InvalidPortFormat": "端口号格式不正确。",
       "Launch": "发射",
+      "LaunchBlocked": "会话未启动",
+      "LaunchCheckFailed": "启动前检查失败或无响应，因此未启动任何会话。请重试。",
       "LaunchConfirmationDialog": "要保留您的代码和数据，或与其他协作者共享，只需在数据和存储侧栏中创建一个存储文件夹，然后在启动资源时挂载该文件夹并将其保留在那里。",
       "LaunchMultipleSessions": "启动多个会话",
       "LaunchMultipleSessionsDescription": "一次性以相同配置启动多个会话。每个会话使用下方显示的资源独立创建。",

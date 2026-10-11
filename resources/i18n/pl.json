@@ -2893,6 +2893,8 @@
       "InvalidMountsSelectionWarning": "Informacje o wyborze folderu są nieprawidłowe. Sprawdź wybrany folder.",
       "InvalidPortFormat": "Format numeru portu jest nieprawidłowy.",
       "Launch": "Uruchomić",
+      "LaunchBlocked": "Sesja nie została uruchomiona",
+      "LaunchCheckFailed": "Kontrola przed uruchomieniem nie powiodła się lub nie odpowiedziała, więc nie uruchomiono żadnej sesji. Spróbuj ponownie.",
       "LaunchConfirmationDialog": "Aby zachować swój kod i dane lub udostępnić je innym współpracownikom, po prostu utwórz folder przechowywania na pasku bocznym danych i przechowywania, a następnie zamontuj ten folder po uruchomieniu zasobu i zachowaj go tam.",
       "LaunchMultipleSessions": "Uruchom wiele sesji",
       "LaunchMultipleSessionsDescription": "Uruchom kilka sesji z identyczną konfiguracją za jednym razem. Każda sesja jest tworzona niezależnie z zasobami pokazanymi poniżej.",

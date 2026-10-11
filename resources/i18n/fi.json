@@ -2890,6 +2890,8 @@
       "InvalidMountsSelectionWarning": "Kansioiden valintatiedot eivät ole kelvollisia. Katso valittu kansio.",
       "InvalidPortFormat": "Porttinumeron muoto on virheellinen.",
       "Launch": "Laukaisu",
+      "LaunchBlocked": "Istuntoa ei käynnistetty",
+      "LaunchCheckFailed": "Käynnistystarkistus epäonnistui tai ei vastannut, joten istuntoa ei käynnistetty. Yritä uudelleen.",
       "LaunchConfirmationDialog": "Jos haluat säilyttää koodisi ja tietosi tai jakaa ne muiden yhteistyökumppaneiden kanssa, luo tallennuskansio tietojen ja tallennuksen sivupalkissa ja kiinnitä kansio, kun käynnistät resurssin, ja pidä se siellä.",
       "LaunchMultipleSessions": "Käynnistä useita istuntoja",
       "LaunchMultipleSessionsDescription": "Käynnistä useita istuntoja identtisellä konfiguraatiolla kerralla. Jokainen istunto luodaan itsenäisesti alla näytetyillä resursseilla.",

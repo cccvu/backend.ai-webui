@@ -2893,6 +2893,8 @@
       "InvalidMountsSelectionWarning": "Les informations de sélection des dossiers ne sont pas valides. Découvrez le dossier sélectionné.",
       "InvalidPortFormat": "Le format du numéro de port est incorrect.",
       "Launch": "Lancer",
+      "LaunchBlocked": "La session n'a pas été démarrée",
+      "LaunchCheckFailed": "Une vérification avant le lancement a échoué ou n'a pas répondu, aucune session n'a donc été démarrée. Veuillez réessayer.",
       "LaunchConfirmationDialog": "Pour conserver votre code et vos données, ou les partager avec d'autres collaborateurs, créez simplement un dossier de stockage dans la barre latérale Données et stockage, puis montez ce dossier lorsque vous démarrez la ressource et conservez-le.",
       "LaunchMultipleSessions": "Lancer plusieurs sessions",
       "LaunchMultipleSessionsDescription": "Démarrez plusieurs sessions avec la même configuration en une seule fois. Chaque session est créée indépendamment avec les ressources affichées ci-dessous.",

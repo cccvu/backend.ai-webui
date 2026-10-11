@@ -40,7 +40,9 @@ import { useTranslation } from 'react-i18next';
 
 const SessionLauncherPreview: React.FC<{
   onClickEditStep: (stepKey: SessionLauncherStepKey) => void;
-}> = ({ onClickEditStep }) => {
+  /** Rendered at the end of the Resource Allocation card. */
+  resourceExtensionSlot?: React.ReactNode;
+}> = ({ onClickEditStep, resourceExtensionSlot }) => {
   const app = App.useApp();
   const { t } = useTranslation();
   const form = Form.useFormInstance<SessionLauncherFormValue>();
@@ -521,6 +523,7 @@ const SessionLauncherPreview: React.FC<{
             </BAIFlex>
           </Card>
         </BAIFlex>
+        {resourceExtensionSlot}
       </BAICard>
       <BAICard
         title={t('webui.menu.Data&Storage')}
