@@ -1,0 +1,167 @@
+# Build the web bundle (`make bundle`, the zip `package.yml` uploads to a release as
+# backend.ai-webui-bundle-<version>.zip) from this repository's own commit, and on a `bundle-*`
+# tag publish it as a release asset with a build-provenance attestation.
+#
+# For forks that ship their own build of the WebUI: a consumer pins the zip by its sha256 and
+# checks where it came from with
+#   gh attestation verify <zip> --repo <owner>/<repo> \
+#     --signer-workflow <owner>/<repo>/.github/workflows/web-bundle.yml
+#
+# Tag `bundle-<version>-<n>`, where <version> is package.json's version and <n> counts builds of
+# that version. Not `v*`: those tags start the npm publish workflows. The release is created with
+# GITHUB_TOKEN, so it starts no other workflow (`package.yml` runs on `release: published`).
+#
+# Two jobs, so that no code from the dependency tree runs with a write token:
+# - build (read-only): Node and pnpm pinned by checksum, `pnpm install --frozen-lockfile`
+#   with Electron's binary download skipped, then upstream's own `make dep_web` and `make bundle`.
+#   No cache: every build starts from the lockfile.
+# - release (tags only): runs no package code. It checks the artifact's checksum, attests the
+#   zip and creates the release.
+name: Web bundle
+
+on:
+  pull_request:
+  push:
+    tags: ["bundle-*"]
+
+permissions: {}
+
+concurrency:
+  group: web-bundle-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Bump together: the version must keep .nvmrc's major, the checksum is the release's own
+  # (https://nodejs.org/dist/v<version>/SHASUMS256.txt, node-v<version>-linux-x64.tar.xz).
+  NODE_VERSION: "24.21.0"
+  NODE_SHA256: fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6
+  # package.json's packageManager pin, with the registry's integrity for its tarball
+  # (https://registry.npmjs.org/pnpm/<version>, dist.integrity).
+  PNPM_VERSION: "11.1.1"
+  PNPM_INTEGRITY: sha512-0f319zxhe2T6GlaoHDyN/g6WbjOmAQqiVrUXrne+Idk+Ba/8DeGoOw5PKdVp9otEaujwaM1yR8C7PfD7TXvfmg==
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      # Full history: `make versiontag` takes the build number from `git rev-list --count`.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Node.js and pnpm (pinned by checksum)
+        run: |
+          set -euo pipefail
+          tools="$RUNNER_TEMP/tools"
+          mkdir -p "$tools/node" "$tools/pnpm"
+          curl -fsSL --retry 5 -o "$RUNNER_TEMP/node.tar.xz" \
+            "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.xz"
+          echo "$NODE_SHA256  $RUNNER_TEMP/node.tar.xz" | sha256sum --check --quiet -
+          tar -xJf "$RUNNER_TEMP/node.tar.xz" -C "$tools/node" --strip-components=1
+          curl -fsSL --retry 5 -o "$RUNNER_TEMP/pnpm.tgz" \
+            "https://registry.npmjs.org/pnpm/-/pnpm-$PNPM_VERSION.tgz"
+          expected="${PNPM_INTEGRITY#sha512-}"
+          actual=$(openssl dgst -sha512 -binary "$RUNNER_TEMP/pnpm.tgz" | base64 -w0)
+          [ "$actual" = "$expected" ] || { echo "::error::pnpm tarball integrity mismatch"; exit 1; }
+          tar -xzf "$RUNNER_TEMP/pnpm.tgz" -C "$tools/pnpm" --strip-components=1
+          mkdir -p "$tools/bin"
+          printf '#!/bin/sh\nexec "%s" "%s" "$@"\n' "$tools/node/bin/node" "$tools/pnpm/bin/pnpm.mjs" > "$tools/bin/pnpm"
+          chmod +x "$tools/bin/pnpm"
+          echo "$tools/bin" >> "$GITHUB_PATH"
+          echo "$tools/node/bin" >> "$GITHUB_PATH"
+
+      - name: Check the toolchain against the repository's pins
+        run: |
+          set -euo pipefail
+          node_major=$(node -p 'process.versions.node.split(".")[0]')
+          [ "$node_major" = "$(tr -d '[:space:]v' < .nvmrc)" ] \
+            || { echo "::error::Node $node_major, but .nvmrc says $(cat .nvmrc)"; exit 1; }
+          wanted=$(node -p 'require("./package.json").packageManager')
+          [ "$wanted" = "pnpm@$PNPM_VERSION" ] \
+            || { echo "::error::pnpm $PNPM_VERSION, but packageManager says $wanted"; exit 1; }
+          [ "$(pnpm --version)" = "$PNPM_VERSION" ]
+
+      - name: Install dependencies (frozen lockfile)
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+          HUSKY: "0"
+        run: pnpm install --frozen-lockfile
+
+      # Upstream's release steps (package.yml, build_web).
+      - name: Build the web bundle
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: |
+          make dep_web
+          make bundle
+
+      - name: Name and checksum the bundle
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version=$(node -p 'require("./package.json").version')
+          zip="backend.ai-webui-bundle-$version.zip"
+          [ -f "app/$zip" ] || { echo "::error::make bundle wrote no app/$zip"; exit 1; }
+          if [ "$REF_TYPE" = tag ]; then
+            [[ "$TAG" =~ ^bundle-([0-9]+\.[0-9]+\.[0-9]+)-[1-9][0-9]*$ ]] \
+              || { echo "::error::tag $TAG is not bundle-<version>-<n>"; exit 1; }
+            [ "${BASH_REMATCH[1]}" = "$version" ] \
+              || { echo "::error::tag $TAG, but package.json's version is $version"; exit 1; }
+          fi
+          mkdir -p dist-bundle
+          mv "app/$zip" dist-bundle/
+          (cd dist-bundle && sha256sum "$zip" > "$zip.sha256" && cat "$zip.sha256")
+          unzip -p "dist-bundle/$zip" version.json
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-bundle
+          path: dist-bundle/
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: release
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/bundle-')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # the release and its assets
+      id-token: write # the attestation's signing certificate
+      attestations: write # storing the attestation
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: web-bundle
+          path: dist-bundle
+
+      - name: Check the artifact
+        working-directory: dist-bundle
+        run: |
+          set -euo pipefail
+          [ "$(find . -name '*.zip' | wc -l)" -eq 1 ] && [ "$(find . -name '*.zip.sha256' | wc -l)" -eq 1 ]
+          sha256sum --check --strict -- *.zip.sha256
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist-bundle/*.zip
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" dist-bundle/*.zip dist-bundle/*.zip.sha256 \
+            --verify-tag --latest=false --title "$TAG" \
+            --notes "Web bundle built from $SHA by .github/workflows/web-bundle.yml, with a build-provenance attestation (gh attestation verify)."
