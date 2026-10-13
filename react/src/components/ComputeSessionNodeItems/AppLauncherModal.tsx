@@ -3,7 +3,7 @@
  Copyright (c) 2015-2026 Lablup Inc. All rights reserved.
  */
 import { AppLauncherModalFragment$key } from '../../__generated__/AppLauncherModalFragment.graphql';
-import { openAppWindow } from '../../helper/appWindow';
+import { followLaunch, openAppWindow } from '../../helper/appWindow';
 import { useSuspendedBackendaiClient } from '../../hooks';
 import {
   ServicePort,
@@ -154,7 +154,7 @@ const AppLauncherModal: React.FC<AppLauncherModalProps> = ({
 
       // Use new launchApp API for regular apps
       // Errors are handled by the notification system in launchApp
-      const launched = await launchAppWithNotification({
+      const launch = launchAppWithNotification({
         app: app?.name ?? '',
         port: preferredPort,
         openToPublic,
@@ -229,13 +229,9 @@ const AppLauncherModal: React.FC<AppLauncherModalProps> = ({
 
       // HTTP apps (most apps) - open in new window
       if (appWindow) {
-        const appConnectUrl = launched.appConnectUrl?.href;
-        if (appConnectUrl) {
-          setTimeout(() => appWindow.show(appConnectUrl), 1000);
-        } else {
-          appWindow.close();
-        }
+        followLaunch(appWindow, launch, (r) => r.appConnectUrl?.href, 1000);
       }
+      await launch;
     } catch (error) {
       appWindow?.close();
       message.error(getErrorMessage(error));

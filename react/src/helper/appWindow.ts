@@ -46,7 +46,9 @@ export function openAppWindow(): AppWindow {
         // `replace` keeps the blank page out of the window's history.
         appWindow.location.replace(url);
       } else {
-        window.open(url, '_blank');
+        // Electron's window open handler ignores the features and opens
+        // `url` in its own window either way.
+        window.open(url, '_blank', 'noopener');
       }
     },
     close: () => {
@@ -54,4 +56,28 @@ export function openAppWindow(): AppWindow {
       pending = null;
     },
   };
+}
+
+/**
+ * Show the app once `launch` resolves to a URL, after `delayMs`, or close the
+ * window when it resolves to none, `toUrl` throws or `launch` rejects.
+ * Returns `launch` itself, so the caller still awaits it and sees a rejection.
+ */
+export function followLaunch<T>(
+  appWindow: AppWindow,
+  launch: Promise<T>,
+  toUrl: (result: T) => string | undefined,
+  delayMs = 0,
+): Promise<T> {
+  launch
+    .then((result) => {
+      const url = toUrl(result);
+      if (url) {
+        setTimeout(() => appWindow.show(url), delayMs);
+      } else {
+        appWindow.close();
+      }
+    })
+    .catch(() => appWindow.close());
+  return launch;
 }

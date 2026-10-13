@@ -3,7 +3,7 @@
  Copyright (c) 2015-2026 Lablup Inc. All rights reserved.
  */
 import { TensorboardPathModalFragment$key } from '../../__generated__/TensorboardPathModalFragment.graphql';
-import { openAppWindow } from '../../helper/appWindow';
+import { followLaunch, openAppWindow } from '../../helper/appWindow';
 import { useSuspendedBackendaiClient } from '../../hooks';
 import { useBackendAIAppLauncher } from '../../hooks/useBackendAIAppLauncher';
 import { App, Form, Input, Typography } from 'antd';
@@ -78,20 +78,18 @@ const TensorboardPathModal: React.FC<TensorboardPathModalProps> = ({
       });
 
       // 3. Launch new tensorboard with --logdir argument
-      const launched = await launchAppWithNotification({
-        app: 'tensorboard',
-        args: { '--logdir': path },
-        port,
-        openToPublic,
-        allowedClientIps,
-      });
-
       // Open tensorboard in new window
-      if (launched.appConnectUrl) {
-        appWindow.show(launched.appConnectUrl.href);
-      } else {
-        appWindow.close();
-      }
+      await followLaunch(
+        appWindow,
+        launchAppWithNotification({
+          app: 'tensorboard',
+          args: { '--logdir': path },
+          port,
+          openToPublic,
+          allowedClientIps,
+        }),
+        (r) => r.appConnectUrl?.href,
+      );
 
       onRequestClose();
     } catch (error) {

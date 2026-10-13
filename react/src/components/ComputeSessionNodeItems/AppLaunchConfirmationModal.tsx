@@ -3,7 +3,7 @@
  Copyright (c) 2015-2026 Lablup Inc. All rights reserved.
  */
 import { AppLaunchConfirmationModalFragment$key } from '../../__generated__/AppLaunchConfirmationModalFragment.graphql';
-import { openAppWindow } from '../../helper/appWindow';
+import { followLaunch, openAppWindow } from '../../helper/appWindow';
 import { useBackendAIAppLauncher } from '../../hooks/useBackendAIAppLauncher';
 import { Typography } from 'antd';
 import { BAIButton, BAIFlex, BAIModal, BAIModalProps } from 'backend.ai-ui';
@@ -58,24 +58,18 @@ const AppLaunchConfirmationModal: React.FC<AppLaunchConfirmationModalProps> = ({
     const appWindow = openAppWindow();
     onRequestClose();
 
-    try {
-      const launched = await launchAppWithNotification({
+    // Open app in new window after preparation
+    await followLaunch(
+      appWindow,
+      launchAppWithNotification({
         app: appName,
         port,
         openToPublic,
         allowedClientIps,
-      });
-      // Open app in new window after preparation
-      const appConnectUrl = launched.appConnectUrl?.href;
-      if (appConnectUrl) {
-        setTimeout(() => appWindow.show(appConnectUrl), 1000);
-      } else {
-        appWindow.close();
-      }
-    } catch (error) {
-      appWindow.close();
-      throw error;
-    }
+      }),
+      (r) => r.appConnectUrl?.href,
+      1000,
+    );
   };
 
   return (
