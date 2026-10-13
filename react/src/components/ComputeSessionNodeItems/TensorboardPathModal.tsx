@@ -3,6 +3,7 @@
  Copyright (c) 2015-2026 Lablup Inc. All rights reserved.
  */
 import { TensorboardPathModalFragment$key } from '../../__generated__/TensorboardPathModalFragment.graphql';
+import { openAppWindow } from '../../helper/appWindow';
 import { useSuspendedBackendaiClient } from '../../hooks';
 import { useBackendAIAppLauncher } from '../../hooks/useBackendAIAppLauncher';
 import { App, Form, Input, Typography } from 'antd';
@@ -58,6 +59,9 @@ const TensorboardPathModal: React.FC<TensorboardPathModalProps> = ({
     useBackendAIAppLauncher(session);
 
   const handleSubmit = async () => {
+    // Open tensorboard's window while the click still counts as a user
+    // gesture; this must stay before the first `await`.
+    const appWindow = openAppWindow();
     try {
       const values = await form.validateFields();
       const path = values.tensorboardPath || '/home/work/logs';
@@ -74,22 +78,24 @@ const TensorboardPathModal: React.FC<TensorboardPathModalProps> = ({
       });
 
       // 3. Launch new tensorboard with --logdir argument
-      await launchAppWithNotification({
+      const launched = await launchAppWithNotification({
         app: 'tensorboard',
         args: { '--logdir': path },
         port,
         openToPublic,
         allowedClientIps,
-        onPrepared(workerInfo) {
-          // Open tensorboard in new window
-          if (workerInfo.appConnectUrl) {
-            window.open(workerInfo.appConnectUrl.href, '_blank');
-          }
-        },
       });
+
+      // Open tensorboard in new window
+      if (launched.appConnectUrl) {
+        appWindow.show(launched.appConnectUrl.href);
+      } else {
+        appWindow.close();
+      }
 
       onRequestClose();
     } catch (error) {
+      appWindow.close();
       logger.error('Failed to launch tensorboard:', error);
       message.error(getErrorMessage(error as Error));
     }

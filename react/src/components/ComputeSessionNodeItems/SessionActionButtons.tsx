@@ -6,6 +6,7 @@ import {
   SessionActionButtonsFragment$data,
   SessionActionButtonsFragment$key,
 } from '../../__generated__/SessionActionButtonsFragment.graphql';
+import { openAppWindow } from '../../helper/appWindow';
 import { useSuspendedBackendaiClient } from '../../hooks';
 import { useCurrentUserInfo } from '../../hooks/backendai';
 import { useSuspendedAppTemplateConfig } from '../../hooks/useAppTemplate';
@@ -167,20 +168,23 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
   const launchApp = () => {
     if (!primaryAppOption?.appName) return;
 
-    appLauncher.launchAppWithNotification({
-      app: primaryAppOption.appName,
-      onPrepared(workInfo) {
+    // Open the app's window while the click still counts as a user gesture.
+    const appWindow = openAppWindow();
+    appLauncher
+      .launchAppWithNotification({ app: primaryAppOption.appName })
+      // The notification shows any error; only the window is left to handle.
+      .then((workInfo) => {
         if (workInfo.appConnectUrl) {
           const urlPostfix = primaryAppOption.urlPostfix || '';
           const targetUrl = urlPostfix
             ? new URL(urlPostfix, workInfo.appConnectUrl.href)
             : workInfo.appConnectUrl;
-          setTimeout(() => {
-            globalThis.open(targetUrl.href, '_blank');
-          }, 1000);
+          setTimeout(() => appWindow.show(targetUrl.href), 1000);
+        } else {
+          appWindow.close();
         }
-      },
-    });
+      })
+      .catch(() => appWindow.close());
   };
 
   return session ? (

@@ -3,6 +3,7 @@
  Copyright (c) 2015-2026 Lablup Inc. All rights reserved.
  */
 import { AppLauncherModalFragment$key } from '../../__generated__/AppLauncherModalFragment.graphql';
+import { openAppWindow } from '../../helper/appWindow';
 import { useSuspendedBackendaiClient } from '../../hooks';
 import {
   ServicePort,
@@ -105,12 +106,26 @@ const AppLauncherModal: React.FC<AppLauncherModalProps> = ({
   const handleAppLaunch = async (app: Partial<TemplateItem> | null) => {
     if (!app?.name) return;
 
+    // Open the app's window while the click still counts as a user gesture.
+    // Apps that ask for confirmation or a path first, and TCP apps (shown in
+    // a connection dialog), open no window from here.
+    const servicePort = servicePorts.find((port) => port.name === app.name);
+    const isTCP = servicePort?.protocol === 'tcp';
+    const appWindow =
+      ['nniboard', 'mlflow-ui', 'tensorboard'].includes(app.name) ||
+      TCP_APPS.includes(app.name) ||
+      isTCP
+        ? undefined
+        : openAppWindow();
+
     try {
       const values = await formRef.current?.validateFields().catch(() => {
         return;
       });
       const allowedClientIps = openToPublic ? values?.clientIps : undefined;
-      const preferredPort = tryPreferredPort ? values?.preferredPort : undefined;
+      const preferredPort = tryPreferredPort
+        ? values?.preferredPort
+        : undefined;
 
       // Handle special apps that require confirmation before launching (nniboard, mlflow-ui)
       // These apps need to run before tunneling, so show confirmation dialog first
@@ -139,7 +154,7 @@ const AppLauncherModal: React.FC<AppLauncherModalProps> = ({
 
       // Use new launchApp API for regular apps
       // Errors are handled by the notification system in launchApp
-      await launchAppWithNotification({
+      const launched = await launchAppWithNotification({
         app: app?.name ?? '',
         port: preferredPort,
         openToPublic,
@@ -200,11 +215,6 @@ const AppLauncherModal: React.FC<AppLauncherModalProps> = ({
 
           // Generic TCP apps (non-standard protocols)
           // Apps that use TCP protocol but aren't handled by specific modals above
-          const servicePort = servicePorts.find(
-            (port) => port.name === app.name,
-          );
-          const isTCP = servicePort?.protocol === 'tcp';
-
           if (isTCP && !TCP_APPS.includes(app.name ?? '')) {
             setTcpModalState({
               open: true,
@@ -214,16 +224,20 @@ const AppLauncherModal: React.FC<AppLauncherModalProps> = ({
             });
             return;
           }
-
-          // HTTP apps (most apps) - open in new window
-          if (workerInfo.appConnectUrl && !isTCP) {
-            setTimeout(() => {
-              window.open(workerInfo.appConnectUrl?.href, '_blank');
-            }, 1000);
-          }
         },
       });
+
+      // HTTP apps (most apps) - open in new window
+      if (appWindow) {
+        const appConnectUrl = launched.appConnectUrl?.href;
+        if (appConnectUrl) {
+          setTimeout(() => appWindow.show(appConnectUrl), 1000);
+        } else {
+          appWindow.close();
+        }
+      }
     } catch (error) {
+      appWindow?.close();
       message.error(getErrorMessage(error));
     }
   };
