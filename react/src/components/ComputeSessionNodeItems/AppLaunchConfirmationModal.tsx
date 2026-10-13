@@ -3,6 +3,7 @@
  Copyright (c) 2015-2026 Lablup Inc. All rights reserved.
  */
 import { AppLaunchConfirmationModalFragment$key } from '../../__generated__/AppLaunchConfirmationModalFragment.graphql';
+import { followLaunch, openAppWindow } from '../../helper/appWindow';
 import { useBackendAIAppLauncher } from '../../hooks/useBackendAIAppLauncher';
 import { Typography } from 'antd';
 import { BAIButton, BAIFlex, BAIModal, BAIModalProps } from 'backend.ai-ui';
@@ -53,22 +54,22 @@ const AppLaunchConfirmationModal: React.FC<AppLaunchConfirmationModalProps> = ({
   const { launchAppWithNotification } = useBackendAIAppLauncher(session);
 
   const handleConfirmAndRun = async () => {
+    // Open the app's window while the click still counts as a user gesture.
+    const appWindow = openAppWindow();
     onRequestClose();
 
-    await launchAppWithNotification({
-      app: appName,
-      port,
-      openToPublic,
-      allowedClientIps,
-      onPrepared(workerInfo) {
-        // Open app in new window after preparation
-        if (workerInfo.appConnectUrl) {
-          setTimeout(() => {
-            window.open(workerInfo.appConnectUrl?.href, '_blank');
-          }, 1000);
-        }
-      },
-    });
+    // Open app in new window after preparation
+    await followLaunch(
+      appWindow,
+      launchAppWithNotification({
+        app: appName,
+        port,
+        openToPublic,
+        allowedClientIps,
+      }),
+      (r) => r.appConnectUrl?.href,
+      1000,
+    );
   };
 
   return (

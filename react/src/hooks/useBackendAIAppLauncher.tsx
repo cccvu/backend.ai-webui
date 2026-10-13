@@ -4,6 +4,7 @@
  */
 import { useSuspendedBackendaiClient, useWebUINavigate } from '.';
 import { useBackendAIAppLauncherFragment$key } from '../__generated__/useBackendAIAppLauncherFragment.graphql';
+import { followLaunch, openAppWindow } from '../helper/appWindow';
 import { requestLocalProxyToken } from '../helper/localProxyToken';
 import { useSetBAINotification } from './useBAINotification';
 import { useProjectPath } from './useRouteScope';
@@ -985,17 +986,20 @@ export const useBackendAIAppLauncher = (
       openToPublic?: boolean;
       allowedClientIps?: Array<string>;
     }) => {
-      return launchAppWithNotification({
-        app: 'ttyd',
-        openToPublic,
-        allowedClientIps,
-        onPrepared(workInfo) {
-          // Auto-open window after 1 second
-          setTimeout(() => {
-            globalThis.open(workInfo.appConnectUrl?.href || '', '_blank');
-          }, 1000);
-        },
-      });
+      // Open the terminal's window while the click still counts as a user
+      // gesture; this must stay before any `await`.
+      const appWindow = openAppWindow();
+      // Auto-open window after 1 second
+      return followLaunch(
+        appWindow,
+        launchAppWithNotification({
+          app: 'ttyd',
+          openToPublic,
+          allowedClientIps,
+        }),
+        (r) => r.appConnectUrl?.href,
+        1000,
+      );
     },
     /**
      * Convenience method to launch Jupyter Notebook app.
