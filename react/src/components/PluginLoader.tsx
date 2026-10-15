@@ -14,8 +14,14 @@
  * 6. Manages plugin active/inactive state based on the current route
  * 7. Records the session launcher extension each page plugin declares
  *    (a static `sessionLauncherExtension` tag on its element class)
+ * 8. Records the session action extension each page plugin declares
+ *    (a static `sessionActionExtension` tag on its element class)
  */
 import { useCurrentMenuKey } from '../hooks/useRouteScope';
+import {
+  readSessionActionExtensionTag,
+  sessionActionExtensionTagsState,
+} from '../hooks/useSessionActionExtensions';
 import {
   readSessionLauncherExtensionTag,
   sessionLauncherExtensionTagsState,
@@ -68,6 +74,9 @@ function PluginLoader() {
   const setSessionLauncherExtensionTags = useSetAtom(
     sessionLauncherExtensionTagsState,
   );
+  const setSessionActionExtensionTags = useSetAtom(
+    sessionActionExtensionTagsState,
+  );
   const loadingStarted = useAtomValue(pluginLoadingStartedState);
   const setLoadingStarted = useSetAtom(pluginLoadingStartedState);
   const { logger } = useBAILogger();
@@ -101,6 +110,7 @@ function PluginLoader() {
 
       // Indexed by plugin position so the order follows the configuration.
       const launcherExtensionTags: Array<string | undefined> = [];
+      const actionExtensionTags: Array<string | undefined> = [];
 
       const pluginLoaderQueue: Promise<void>[] = pluginNames.map(
         async (page, index) => {
@@ -172,6 +182,15 @@ function PluginLoader() {
                 `Plugin "${page}" declares a session launcher extension that is not a defined custom element`,
               );
             }
+
+            const actionExtensionTag = readSessionActionExtensionTag(page);
+            if (actionExtensionTag) {
+              actionExtensionTags[index] = actionExtensionTag;
+            } else if (actionExtensionTag === null) {
+              logger.warn(
+                `Plugin "${page}" declares a session action extension that is not a defined custom element`,
+              );
+            }
           } catch (error) {
             logger.warn(`Failed to load plugin "${page}":`, error);
           }
@@ -185,6 +204,7 @@ function PluginLoader() {
 
       // Update Jotai state
       setSessionLauncherExtensionTags(_.uniq(_.compact(launcherExtensionTags)));
+      setSessionActionExtensionTags(_.uniq(_.compact(actionExtensionTags)));
       setWebUIPlugins(plugins);
       setPluginLoaded(true);
 
@@ -199,6 +219,7 @@ function PluginLoader() {
       setWebUIPlugins,
       setPluginLoaded,
       setSessionLauncherExtensionTags,
+      setSessionActionExtensionTags,
     ],
   );
 

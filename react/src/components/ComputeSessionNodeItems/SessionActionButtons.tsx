@@ -11,7 +11,12 @@ import { useSuspendedBackendaiClient } from '../../hooks';
 import { useCurrentUserInfo } from '../../hooks/backendai';
 import { useSuspendedAppTemplateConfig } from '../../hooks/useAppTemplate';
 import { useBackendAIAppLauncher } from '../../hooks/useBackendAIAppLauncher';
+import {
+  buildSessionActionExtensionContext,
+  useSessionActionExtensionTags,
+} from '../../hooks/useSessionActionExtensions';
 import ErrorBoundaryWithNullFallback from '../ErrorBoundaryWithNullFallback';
+import SessionActionExtensionSlot from '../SessionActionExtensionSlot';
 import AppLauncherModal from './AppLauncherModal';
 import ContainerCommitModal from './ContainerCommitModal';
 import ContainerLogModal from './ContainerLogModal';
@@ -40,7 +45,9 @@ type SessionActionButtonKey =
   | 'logs'
   | 'containerCommit'
   | 'sftp'
-  | 'terminate';
+  | 'terminate'
+  /** The elements page plugins contribute (types/sessionActionExtension.ts). */
+  | 'extensions';
 
 export type PrimaryAppOption = {
   appName: 'jupyter' | 'filebrowser';
@@ -126,6 +133,8 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
 
   const userInfo = useCurrentUserInfo();
   const isOwner = userInfo[0]?.uuid === session?.user_id;
+
+  const extensionTags = useSessionActionExtensionTags();
 
   const hiddenButtons = React.useMemo(
     () => new Set(hiddenButtonKeys ?? []),
@@ -384,6 +393,12 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
           </Tooltip>
         )}
       </Wrapper>
+      {isVisible('extensions') && isOwner && (
+        <SessionActionExtensionSlot
+          tags={extensionTags}
+          context={buildSessionActionExtensionContext(session)}
+        />
+      )}
 
       <Suspense fallback={null}>
         {isVisible('appLauncher') && (
