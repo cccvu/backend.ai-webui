@@ -117,7 +117,7 @@ const BAIComputeSessionNodeNotificationItem: React.FC<
                   compact
                   size="small"
                   sessionFrgmt={node || null}
-                  hiddenButtonKeys={['containerCommit']}
+                  hiddenButtonKeys={['containerCommit', 'extensions']}
                   primaryAppOption={primaryAppOption}
                 />
               </BAIFlex>

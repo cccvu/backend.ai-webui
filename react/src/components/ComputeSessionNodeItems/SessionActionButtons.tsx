@@ -11,13 +11,19 @@ import { useSuspendedBackendaiClient } from '../../hooks';
 import { useCurrentUserInfo } from '../../hooks/backendai';
 import { useSuspendedAppTemplateConfig } from '../../hooks/useAppTemplate';
 import { useBackendAIAppLauncher } from '../../hooks/useBackendAIAppLauncher';
+import {
+  buildSessionActionExtensionContext,
+  useSessionActionExtensionTags,
+} from '../../hooks/useSessionActionExtensions';
 import ErrorBoundaryWithNullFallback from '../ErrorBoundaryWithNullFallback';
+import SessionActionExtensionSlot from '../SessionActionExtensionSlot';
 import AppLauncherModal from './AppLauncherModal';
 import ContainerCommitModal from './ContainerCommitModal';
 import ContainerLogModal from './ContainerLogModal';
 import SFTPConnectionInfoModal from './SFTPConnectionInfoModal';
+import SessionActionButtonGroup from './SessionActionButtonGroup';
 import TerminateSessionModal from './TerminateSessionModal';
-import { Tooltip, Button, theme, Space, type ButtonProps } from 'antd';
+import { Tooltip, Button, theme, type ButtonProps } from 'antd';
 import {
   BAIAppIcon,
   BAIContainerCommitIcon,
@@ -40,7 +46,9 @@ type SessionActionButtonKey =
   | 'logs'
   | 'containerCommit'
   | 'sftp'
-  | 'terminate';
+  | 'terminate'
+  /** The elements page plugins contribute (types/sessionActionExtension.ts). */
+  | 'extensions';
 
 export type PrimaryAppOption = {
   appName: 'jupyter' | 'filebrowser';
@@ -70,13 +78,6 @@ const isAppSupported = (session: SessionActionButtonsFragment$data) => {
       session?.type || '',
     ) && !_.isEmpty(JSON.parse(session?.service_ports ?? '{}'))
   );
-};
-
-const Wrapper: React.FC<{ compact?: boolean; children?: React.ReactNode }> = ({
-  children,
-  compact,
-}) => {
-  return compact ? <Space.Compact>{children}</Space.Compact> : <>{children}</>;
 };
 
 const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
@@ -126,6 +127,8 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
 
   const userInfo = useCurrentUserInfo();
   const isOwner = userInfo[0]?.uuid === session?.user_id;
+
+  const extensionTags = useSessionActionExtensionTags();
 
   const hiddenButtons = React.useMemo(
     () => new Set(hiddenButtonKeys ?? []),
@@ -187,7 +190,17 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
 
   return session ? (
     <>
-      <Wrapper compact={compact}>
+      <SessionActionButtonGroup
+        compact={compact}
+        extra={
+          isVisible('extensions') && isOwner && extensionTags.length > 0 ? (
+            <SessionActionExtensionSlot
+              tags={extensionTags}
+              context={buildSessionActionExtensionContext(session)}
+            />
+          ) : undefined
+        }
+      >
         {primaryAppOption && (
           <>
             {primaryAppOption.appName === 'jupyter' && (
@@ -383,7 +396,7 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
             />
           </Tooltip>
         )}
-      </Wrapper>
+      </SessionActionButtonGroup>
 
       <Suspense fallback={null}>
         {isVisible('appLauncher') && (
