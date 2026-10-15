@@ -21,8 +21,9 @@ import AppLauncherModal from './AppLauncherModal';
 import ContainerCommitModal from './ContainerCommitModal';
 import ContainerLogModal from './ContainerLogModal';
 import SFTPConnectionInfoModal from './SFTPConnectionInfoModal';
+import SessionActionButtonGroup from './SessionActionButtonGroup';
 import TerminateSessionModal from './TerminateSessionModal';
-import { Tooltip, Button, theme, Space, type ButtonProps } from 'antd';
+import { Tooltip, Button, theme, type ButtonProps } from 'antd';
 import {
   BAIAppIcon,
   BAIContainerCommitIcon,
@@ -77,13 +78,6 @@ const isAppSupported = (session: SessionActionButtonsFragment$data) => {
       session?.type || '',
     ) && !_.isEmpty(JSON.parse(session?.service_ports ?? '{}'))
   );
-};
-
-const Wrapper: React.FC<{ compact?: boolean; children?: React.ReactNode }> = ({
-  children,
-  compact,
-}) => {
-  return compact ? <Space.Compact>{children}</Space.Compact> : <>{children}</>;
 };
 
 const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
@@ -196,7 +190,17 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
 
   return session ? (
     <>
-      <Wrapper compact={compact}>
+      <SessionActionButtonGroup
+        compact={compact}
+        extra={
+          isVisible('extensions') && isOwner && extensionTags.length > 0 ? (
+            <SessionActionExtensionSlot
+              tags={extensionTags}
+              context={buildSessionActionExtensionContext(session)}
+            />
+          ) : undefined
+        }
+      >
         {primaryAppOption && (
           <>
             {primaryAppOption.appName === 'jupyter' && (
@@ -392,13 +396,7 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
             />
           </Tooltip>
         )}
-      </Wrapper>
-      {isVisible('extensions') && isOwner && (
-        <SessionActionExtensionSlot
-          tags={extensionTags}
-          context={buildSessionActionExtensionContext(session)}
-        />
-      )}
+      </SessionActionButtonGroup>
 
       <Suspense fallback={null}>
         {isVisible('appLauncher') && (
