@@ -1,6 +1,7 @@
 import {
   getCustomTheme,
   loadCustomThemeConfig,
+  subscribeCustomTheme,
   type CustomThemeConfig,
   type LogoConfig,
 } from './customThemeConfig';
@@ -51,6 +52,19 @@ describe('customThemeConfig', () => {
     it('should return undefined when no theme is loaded', () => {
       const theme = getCustomTheme();
       expect(theme).toBeUndefined();
+    });
+  });
+
+  describe('subscribeCustomTheme', () => {
+    it('calls back on custom-theme-loaded until unsubscribed', () => {
+      const onChange = vi.fn();
+      const unsubscribe = subscribeCustomTheme(onChange);
+      document.dispatchEvent(new CustomEvent('custom-theme-loaded'));
+      expect(onChange).toHaveBeenCalledTimes(1);
+
+      unsubscribe();
+      document.dispatchEvent(new CustomEvent('custom-theme-loaded'));
+      expect(onChange).toHaveBeenCalledTimes(1);
     });
   });
 

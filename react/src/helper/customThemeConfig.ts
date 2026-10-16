@@ -76,6 +76,16 @@ let _customTheme: CustomThemeConfig | undefined;
 export const getCustomTheme = () => _customTheme;
 
 /**
+ * `useSyncExternalStore` subscription for the loaded theme. React re-reads
+ * the snapshot right after subscribing, so a theme that settles between a
+ * component's first render and its subscription is not missed.
+ */
+export const subscribeCustomTheme = (onChange: () => void) => {
+  document.addEventListener('custom-theme-loaded', onChange);
+  return () => document.removeEventListener('custom-theme-loaded', onChange);
+};
+
+/**
  * Keep only structurally valid family entries (each must carry both `light`
  * and `dark` theme configs) so a malformed `families` block in theme.json
  * degrades to fewer families instead of a broken catalog.
