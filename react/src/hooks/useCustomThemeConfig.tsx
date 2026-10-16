@@ -7,12 +7,13 @@ import {
   ThemeFamilyConfig,
   getCustomTheme,
   pickValidThemeFamilies,
+  subscribeCustomTheme,
 } from '../helper/customThemeConfig';
 import { useBAISettingUserState } from './useBAISetting';
 import { useLocalStorageGlobalState } from './useLocalStorageGlobalState';
 import { useSessionStorageState } from 'ahooks';
 import * as _ from 'lodash-es';
-import { useEffect, useEffectEvent, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 
 /**
  * The family shown before the user picks one. Always synthesized from
@@ -41,42 +42,32 @@ export const THEME_FAMILY_STORAGE_KEY = 'backendaiwebui.settings.themeFamily';
  */
 export const useRawCustomThemeConfig = (): CustomThemeConfig | undefined => {
   'use memo';
-  const [customThemeConfig, setCustomThemeConfig] = useState<
-    CustomThemeConfig | undefined
-  >(getCustomTheme());
+  // Read the store through useSyncExternalStore rather than a useState
+  // snapshot: theme.json can settle between the first render and the passive
+  // effect that would subscribe, and this provider never remounts.
+  const customThemeConfig = useSyncExternalStore(
+    subscribeCustomTheme,
+    getCustomTheme,
+  );
   const [userCustomThemeConfig] = useBAISettingUserState('custom_theme_config');
   const [isThemePreviewMode] = useSessionStorageState('isThemePreviewMode', {
     defaultValue: false,
   });
 
-  const addEventListener = useEffectEvent(() => {
-    if (isThemePreviewMode) {
-      const themePreviewModeHandler = (e: StorageEvent) => {
-        if (e.key === 'backendaiwebui.settings.user.custom_theme_config') {
-          window.location.reload();
-        }
-      };
-      window.addEventListener('storage', themePreviewModeHandler);
-      return () => {
-        window.removeEventListener('storage', themePreviewModeHandler);
-      };
-    }
-
-    if (!customThemeConfig) {
-      const handler = () => {
-        setCustomThemeConfig(getCustomTheme());
-      };
-      document.addEventListener('custom-theme-loaded', handler);
-
-      return () => {
-        document.removeEventListener('custom-theme-loaded', handler);
-      };
-    }
-  });
-
   useEffect(() => {
-    addEventListener();
-  }, []);
+    if (!isThemePreviewMode) {
+      return;
+    }
+    const themePreviewModeHandler = (e: StorageEvent) => {
+      if (e.key === 'backendaiwebui.settings.user.custom_theme_config') {
+        window.location.reload();
+      }
+    };
+    window.addEventListener('storage', themePreviewModeHandler);
+    return () => {
+      window.removeEventListener('storage', themePreviewModeHandler);
+    };
+  }, [isThemePreviewMode]);
 
   return isThemePreviewMode ? userCustomThemeConfig : customThemeConfig;
 };
