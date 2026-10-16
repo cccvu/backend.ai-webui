@@ -10,7 +10,8 @@ import {
   DEFAULT_THEME_FAMILY,
   useCustomThemeConfig,
 } from './useCustomThemeConfig';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
+import { useLayoutEffect, type ReactNode } from 'react';
 
 // Avoid importing the real useBAISetting (which pulls in DefaultProviders and
 // the whole app graph). Mirror its localStorage layout so tests can seed
@@ -215,5 +216,91 @@ describe('useCustomThemeConfig', () => {
     expect(result.current.themeConfig?.light?.token?.colorPrimary).toBe(
       '#FF7A00',
     );
+  });
+});
+
+describe('useCustomThemeConfig when theme.json settles', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    document.body.removeAttribute('data-theme-family');
+    mockGetCustomTheme.mockReturnValue(undefined);
+  });
+
+  const settle = () => {
+    mockGetCustomTheme.mockReturnValue(baseConfig);
+    document.dispatchEvent(new CustomEvent('custom-theme-loaded'));
+  };
+
+  // A sibling rendered after the hook: its layout effect runs after the
+  // hook's render but before the hook's passive effects, the same gap in
+  // which the theme.json fetch can settle in production. A hook that only
+  // subscribes from a passive effect misses this event for good, and the
+  // root provider never remounts to read the theme again.
+  const SettleInTheGap = () => {
+    useLayoutEffect(() => {
+      settle();
+    }, []);
+    return null;
+  };
+  const settleInTheGap = ({ children }: { children: ReactNode }) => (
+    <>
+      {children}
+      <SettleInTheGap />
+    </>
+  );
+
+  it('picks up a theme.json that settles between the first render and the subscription', () => {
+    const { result } = renderHook(() => useCustomThemeConfig(), {
+      wrapper: settleInTheGap,
+    });
+    expect(result.current.themeConfig?.light?.token?.colorPrimary).toBe(
+      '#FF7A00',
+    );
+  });
+
+  it('applies a theme.json that settles after mount', () => {
+    const { result } = renderHook(() => useCustomThemeConfig());
+    expect(result.current.themeConfig).toBeUndefined();
+    act(() => {
+      settle();
+    });
+    expect(result.current.themeConfig?.light?.token?.colorPrimary).toBe(
+      '#FF7A00',
+    );
+  });
+
+  const countCalls = (spy: { mock: { calls: unknown[][] } }, type: string) =>
+    spy.mock.calls.filter(([eventType]) => eventType === type).length;
+
+  it('removes its listeners on unmount', () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    const remove = vi.spyOn(document, 'removeEventListener');
+    try {
+      const { unmount } = renderHook(() => useCustomThemeConfig());
+      unmount();
+      const adds = countCalls(add, 'custom-theme-loaded');
+      expect(adds).toBeGreaterThanOrEqual(1);
+      expect(countCalls(remove, 'custom-theme-loaded')).toBe(adds);
+    } finally {
+      add.mockRestore();
+      remove.mockRestore();
+    }
+  });
+
+  it('removes its preview-mode storage listener on unmount', () => {
+    sessionStorage.setItem('isThemePreviewMode', 'true');
+    const add = vi.spyOn(window, 'addEventListener');
+    const remove = vi.spyOn(window, 'removeEventListener');
+    try {
+      const { unmount } = renderHook(() => useCustomThemeConfig());
+      unmount();
+      const adds = countCalls(add, 'storage');
+      expect(adds).toBeGreaterThanOrEqual(1);
+      expect(countCalls(remove, 'storage')).toBe(adds);
+    } finally {
+      add.mockRestore();
+      remove.mockRestore();
+    }
   });
 });
