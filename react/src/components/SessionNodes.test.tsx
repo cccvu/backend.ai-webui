@@ -219,7 +219,9 @@ describe('SessionNodes', () => {
     const [element] = mounted(container);
     expect(element.context?.status).toBe('PENDING');
     rerenderWith([sessionOf(1, { status: 'RUNNING' })]);
-    expect(mounted(container)).toEqual([element]);
+    expect(mounted(container)).toHaveLength(1);
+    expect(mounted(container)[0]).toBe(element);
+    expect(element.isConnected).toBe(true);
     expect(element.context?.status).toBe('RUNNING');
     expect(element.given.map((context) => context.status)).toEqual([
       'PENDING',
@@ -231,7 +233,26 @@ describe('SessionNodes', () => {
     const { container, rerenderWith } = renderList(OWNER, [sessionOf(1)]);
     const [element] = mounted(container);
     rerenderWith([sessionOf(1)]);
-    expect(mounted(container)).toEqual([element]);
+    expect(mounted(container)).toHaveLength(1);
+    expect(mounted(container)[0]).toBe(element);
+    expect(element.isConnected).toBe(true);
     expect(element.given).toHaveLength(1);
+  });
+
+  it('keeps each row its own element when the rows are reordered', () => {
+    const { container, rerenderWith } = renderList(OWNER, [
+      sessionOf(1),
+      sessionOf(2),
+    ]);
+    const [first, second] = mounted(container);
+    rerenderWith([sessionOf(2), sessionOf(1)]);
+    const after = mounted(container);
+    expect(after).toHaveLength(2);
+    expect(after[0]).toBe(second);
+    expect(after[1]).toBe(first);
+    expect(first.context?.id).toBe(sessionOf(1).row_id);
+    expect(second.context?.id).toBe(sessionOf(2).row_id);
+    expect(first.given).toHaveLength(1);
+    expect(second.given).toHaveLength(1);
   });
 });
