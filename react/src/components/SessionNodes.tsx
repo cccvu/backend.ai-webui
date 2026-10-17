@@ -9,6 +9,10 @@ import {
 import { useSuspendedBackendaiClient } from '../hooks';
 import { useCurrentUserInfo, useCurrentUserRole } from '../hooks/backendai';
 import { useSuspendedAppTemplateConfig } from '../hooks/useAppTemplate';
+import {
+  buildSessionActionExtensionContext,
+  useSessionActionExtensionTags,
+} from '../hooks/useSessionActionExtensions';
 import AppLauncherModal from './ComputeSessionNodeItems/AppLauncherModal';
 import SessionReclamationStatusCell from './ComputeSessionNodeItems/SessionReclamationStatusCell';
 import SessionReservation from './ComputeSessionNodeItems/SessionReservation';
@@ -16,6 +20,7 @@ import SessionSlotCell from './ComputeSessionNodeItems/SessionSlotCell';
 import SessionStatusTag from './ComputeSessionNodeItems/SessionStatusTag';
 import TerminateSessionModal from './ComputeSessionNodeItems/TerminateSessionModal';
 import ImageNodeSimpleTag from './ImageNodeSimpleTag';
+import SessionActionExtensionSlot from './SessionActionExtensionSlot';
 import { Tooltip } from 'antd';
 import {
   filterOutEmpty,
@@ -84,6 +89,7 @@ const SessionNodes: React.FC<SessionNodesProps> = ({
   const baiClient = useSuspendedBackendaiClient();
   const { hideAppsOnBatchSession } = useSuspendedAppTemplateConfig();
   const [userInfo] = useCurrentUserInfo();
+  const extensionTags = useSessionActionExtensionTags();
   const [terminateTarget, setTerminateTarget] =
     useState<SessionNodeInList | null>(null);
   const [appLauncherTarget, setAppLauncherTarget] =
@@ -202,6 +208,23 @@ const SessionNodes: React.FC<SessionNodesProps> = ({
         sorter: isEnableSorter('name'),
         required: true,
         fixed: 'left',
+      },
+      // The elements page plugins contribute to a session's actions
+      // (types/sessionActionExtension.ts), for the sessions the signed-in user
+      // owns. The column exists only while a plugin declares one; it is not
+      // sorted or exported.
+      extensionTags.length > 0 && {
+        key: 'sessionActionExtensions',
+        title: t('general.Control'),
+        render: (__, session) =>
+          userInfo?.uuid && userInfo.uuid === session.user_id ? (
+            <BAIFlex align="center">
+              <SessionActionExtensionSlot
+                tags={extensionTags}
+                context={buildSessionActionExtensionContext(session)}
+              />
+            </BAIFlex>
+          ) : null,
       },
       {
         key: 'status',
