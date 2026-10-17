@@ -23,8 +23,8 @@
  * a session the signed-in user owns, in two places:
  * - the session action buttons (for example in the session detail), one
  *   instance after their own buttons;
- * - each row of a session list, one instance in a column right after the
- *   session's name.
+ * - each row of a session list, one instance in a column placed by default
+ *   right after the session's name.
  * Each instance is given `context` as a property before it is inserted, and
  * a new object whenever one of its fields changes. The context is frozen and
  * is all the element is given.
