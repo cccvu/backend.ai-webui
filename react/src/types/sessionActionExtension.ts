@@ -19,16 +19,23 @@
  * ```
  *
  * The named element must be defined by the time the plugin module finishes
- * loading. PluginLoader records the tag; the session action buttons (for
- * example in the session detail) then mount one instance after their own
- * buttons, only for a session the signed-in user owns. Each instance is
- * given `context` as a property before it is inserted, and a new object
- * whenever one of its fields changes. The context is frozen and is all the
- * element is given.
+ * loading. PluginLoader records the tag, and the element is mounted, only for
+ * a session the signed-in user owns, in two places:
+ * - the session action buttons (for example in the session detail), one
+ *   instance after their own buttons;
+ * - each row of a session list, one instance in a column right after the
+ *   session's name.
+ * Each instance is given `context` as a property before it is inserted, and
+ * a new object whenever one of its fields changes. The context is frozen and
+ * is all the element is given.
+ *
+ * The element may be mounted once per listed session, so it should do no
+ * work, such as a request, until it is used.
  *
  * The element decides what to show, including nothing: for example nothing
  * for a session in a status or of a type it does not act on. It is laid out
- * as one item beside the buttons.
+ * as one item beside the buttons, or alone in its cell, and should size
+ * itself from its container.
  *
  * Failure rules (fail-open): an extension never blocks or hides the other
  * actions.
