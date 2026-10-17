@@ -8,10 +8,10 @@ import { SESSION_ACTION_EXTENSION_VERSION } from '../../types/sessionActionExten
 import type { SessionActionExtensionContext } from '../../types/sessionActionExtension';
 import BAIComputeSessionNodeNotificationItem from '../BAIComputeSessionNodeNotificationItem';
 import SessionActionButtons from './SessionActionButtons';
-import { render } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { Provider, createStore } from 'jotai';
 import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // How the session action buttons wire in the elements page plugins contribute
 // (types/sessionActionExtension.ts): only for the session's owner, and never
@@ -26,11 +26,18 @@ vi.mock('react-relay', async (importOriginal) => ({
 
 vi.mock('react-i18next', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-i18next')>()),
-  useTranslation: () => ({ t: (key: string) => key }),
+  // Keeps an interpolated app name, so a swapped name fails a test.
+  useTranslation: () => ({
+    t: (key: string, options?: { appName?: string }) =>
+      options?.appName ? `${key}:${options.appName}` : key,
+  }),
 }));
 
+const clientConfig = vi.hoisted(() => ({
+  enableContainerCommit: false,
+}));
 vi.mock('../../hooks', () => ({
-  useSuspendedBackendaiClient: () => ({ _config: {} }),
+  useSuspendedBackendaiClient: () => ({ _config: clientConfig }),
   useWebUINavigate: () => vi.fn(),
 }));
 
@@ -139,15 +146,18 @@ describe('SessionActionButtons', () => {
     expect(container.querySelectorAll('button').length).toBeGreaterThan(0);
   });
 
-  it('mounts no extension while the signed-in user is unknown', () => {
-    const { container } = renderAs(
-      undefined,
-      <SessionActionButtons
-        sessionFrgmt={{ ...session, user_id: null } as never}
-      />,
-    );
-    expect(mounted(container)).toBeNull();
-  });
+  it.each([null, undefined])(
+    'mounts no extension while the signed-in user is unknown (user_id %s)',
+    (userId) => {
+      const { container } = renderAs(
+        undefined,
+        <SessionActionButtons
+          sessionFrgmt={{ ...session, user_id: userId } as never}
+        />,
+      );
+      expect(mounted(container)).toBeNull();
+    },
+  );
 
   it('mounts no extension where the caller hides them', () => {
     const { container } = renderAs(
@@ -169,6 +179,101 @@ describe('SessionActionButtons', () => {
     expect(withOne.container.querySelectorAll('button')).toHaveLength(
       withNone.container.querySelectorAll('button').length,
     );
+  });
+});
+
+// Each button is named by its tooltip's text, never by its icon's default
+// label ('app', 'terminal', ...); the app launcher, the one button that shows
+// text beside the icons, is named by that text (WCAG 2.5.3).
+describe('SessionActionButtons accessible names', () => {
+  afterEach(() => {
+    clientConfig.enableContainerCommit = false;
+  });
+
+  const ICON_LABELS = [
+    'app',
+    'jupyter',
+    'file browser',
+    'sftp',
+    'terminal',
+    'session log',
+    'container commit',
+    'terminate',
+  ];
+
+  const names = (container: HTMLElement) =>
+    within(container)
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label'));
+
+  it('shows the app launcher label and names it by that label', () => {
+    const { container } = renderAs(OWNER, buttons({ size: 'large' }));
+    const launcher = within(container).getByRole('button', {
+      name: 'session.appLauncher.App',
+    });
+    expect(launcher.textContent).toBe('session.appLauncher.App');
+  });
+
+  it('keeps the app launcher an icon named by its title at size small', () => {
+    const { container } = renderAs(OWNER, buttons({ size: 'small' }));
+    const launcher = within(container).getByRole('button', {
+      name: 'session.SeeAppDialog',
+    });
+    expect(launcher.textContent).toBe('');
+    expect(launcher.getAttribute('title')).toBe('session.SeeAppDialog');
+    expect(
+      within(container).queryByRole('button', {
+        name: 'session.appLauncher.App',
+      }),
+    ).toBeNull();
+  });
+
+  it.each(['small', 'middle', 'large'] as const)(
+    'names every button by its tooltip key at size %s',
+    (size) => {
+      clientConfig.enableContainerCommit = true;
+      const { container } = renderAs(
+        OWNER,
+        buttons({ size, primaryAppOption: { appName: 'jupyter' } }),
+      );
+      expect(names(container)).toEqual([
+        'session.ExecuteSpecificApp:Jupyter Notebook',
+        size === 'small' ? 'session.SeeAppDialog' : 'session.appLauncher.App',
+        'session.ExecuteTerminalApp',
+        'session.SeeContainerLogs',
+        'session.RequestContainerCommit',
+        'session.TerminateSession',
+      ]);
+      for (const label of ICON_LABELS) {
+        expect(
+          within(container).queryByRole('button', { name: label }),
+        ).toBeNull();
+      }
+    },
+  );
+
+  it('names the file browser and SFTP buttons', () => {
+    const { container } = renderAs(
+      OWNER,
+      <SessionActionButtons
+        sessionFrgmt={{ ...session, type: 'system' } as never}
+        size="large"
+        primaryAppOption={{ appName: 'filebrowser' }}
+      />,
+    );
+    expect(names(container)).toEqual([
+      'session.ExecuteSpecificApp:File browser',
+      'data.explorer.RunSSH/SFTPserver',
+      'session.SeeContainerLogs',
+      'session.TerminateSession',
+    ]);
+  });
+
+  it('leaves each icon its own label', () => {
+    renderAs(OWNER, buttons({ size: 'large' }));
+    for (const label of ['app', 'terminal', 'session log', 'terminate']) {
+      expect(screen.getByLabelText(label).tagName).toBe('SPAN');
+    }
   });
 });
 

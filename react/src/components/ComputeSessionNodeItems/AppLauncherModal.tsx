@@ -338,6 +338,7 @@ const AppLauncherModal: React.FC<AppLauncherModalProps> = ({
                                 style={{ height: 36, width: 36 }}
                               />
                             }
+                            aria-label={app?.title || app?.name}
                             action={() => handleAppLaunch(app)}
                             style={{ height: 72, width: 72 }}
                           />
@@ -378,6 +379,11 @@ const AppLauncherModal: React.FC<AppLauncherModalProps> = ({
                               preview={false}
                               style={{ height: 36, width: 36 }}
                             />
+                          }
+                          aria-label={
+                            app?.ports?.length > 0
+                              ? `${app?.title || app?.name} (${app.ports.join(', ')})`
+                              : app?.title || app?.name
                           }
                           action={() => handleAppLaunch(app)}
                           style={{ height: 72, width: 72 }}
