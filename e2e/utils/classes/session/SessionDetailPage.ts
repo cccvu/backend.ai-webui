@@ -185,7 +185,9 @@ export class SessionDetailPage extends BasePage {
 
     // Click the session log button from the notification toast
     // The notification toast shows after session creation with action buttons
-    const logsButton = this.page.getByRole('button', { name: 'session log' });
+    const logsButton = this.page
+      .getByRole('button')
+      .filter({ has: this.page.getByLabel('session log') });
     await logsButton.waitFor({ state: 'visible', timeout: 5000 });
     await logsButton.click();
 

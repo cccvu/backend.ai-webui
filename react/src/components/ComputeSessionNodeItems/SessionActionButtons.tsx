@@ -220,6 +220,9 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
                     !isAppSupported(session) || !isActive(session) || !isOwner
                   }
                   icon={<BAIJupyterIcon />}
+                  aria-label={t('session.ExecuteSpecificApp', {
+                    appName: 'Jupyter Notebook',
+                  })}
                   onClick={() => {
                     launchApp();
                   }}
@@ -250,6 +253,9 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
                     !isAppSupported(session) || !isActive(session) || !isOwner
                   }
                   icon={<BAIFileBrowserIcon />}
+                  aria-label={t('session.ExecuteSpecificApp', {
+                    appName: 'File browser',
+                  })}
                   onClick={() => {
                     launchApp();
                   }}
@@ -277,6 +283,13 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
                   !isAppSupported(session) || !isActive(session) || !isOwner
                 }
                 icon={<BAIAppIcon />}
+                // Beside the other icons it carries a visible label; its
+                // accessible name is that label (WCAG 2.5.3, label in name).
+                aria-label={
+                  isButtonTitleMode
+                    ? t('session.SeeAppDialog')
+                    : t('session.appLauncher.App')
+                }
                 onClick={() => {
                   onAction?.('appLauncher');
                   setOpenAppLauncherModal(true);
@@ -284,7 +297,9 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
                 title={
                   isButtonTitleMode ? t('session.SeeAppDialog') : undefined
                 }
-              />
+              >
+                {isButtonTitleMode ? null : t('session.appLauncher.App')}
+              </Button>
             </Tooltip>
           </>
         )}
@@ -295,6 +310,7 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
               disabled={!isActive(session) || !isOwner}
               size={size}
               icon={<BAISftpIcon />}
+              aria-label={t('data.explorer.RunSSH/SFTPserver')}
               onClick={() => {
                 setOpenSFTPConnectionInfoModal(true);
               }}
@@ -314,6 +330,7 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
                   !isAppSupported(session) || !isActive(session) || !isOwner
                 }
                 icon={<BAITerminalAppIcon />}
+                aria-label={t('session.ExecuteTerminalApp')}
                 onClick={() => {
                   onAction?.('terminal');
                   appLauncher.runTerminal({});
@@ -336,6 +353,7 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
             <Button
               size={size}
               icon={<BAISessionLogIcon />}
+              aria-label={t('session.SeeContainerLogs')}
               onClick={() => {
                 onAction?.('logs');
                 setOpenLogModal(true);
@@ -358,6 +376,7 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
               size={size}
               disabled={session?.status !== 'RUNNING' || !isOwner}
               icon={<BAIContainerCommitIcon />}
+              aria-label={t('session.RequestContainerCommit')}
               onClick={() => {
                 onAction?.('containerCommit');
                 setOpenContainerCommitModal(true);
@@ -386,6 +405,7 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
                   }}
                 />
               }
+              aria-label={t('session.TerminateSession')}
               onClick={() => {
                 onAction?.('terminate');
                 setOpenTerminateModal(true);
