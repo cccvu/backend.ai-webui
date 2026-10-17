@@ -26,7 +26,11 @@ vi.mock('react-relay', async (importOriginal) => ({
 
 vi.mock('react-i18next', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-i18next')>()),
-  useTranslation: () => ({ t: (key: string) => key }),
+  // Keeps an interpolated app name, so a swapped name fails a test.
+  useTranslation: () => ({
+    t: (key: string, options?: { appName?: string }) =>
+      options?.appName ? `${key}:${options.appName}` : key,
+  }),
 }));
 
 const clientConfig = vi.hoisted(() => ({
@@ -142,15 +146,18 @@ describe('SessionActionButtons', () => {
     expect(container.querySelectorAll('button').length).toBeGreaterThan(0);
   });
 
-  it('mounts no extension while the signed-in user is unknown', () => {
-    const { container } = renderAs(
-      undefined,
-      <SessionActionButtons
-        sessionFrgmt={{ ...session, user_id: null } as never}
-      />,
-    );
-    expect(mounted(container)).toBeNull();
-  });
+  it.each([null, undefined])(
+    'mounts no extension while the signed-in user is unknown (user_id %s)',
+    (userId) => {
+      const { container } = renderAs(
+        undefined,
+        <SessionActionButtons
+          sessionFrgmt={{ ...session, user_id: userId } as never}
+        />,
+      );
+      expect(mounted(container)).toBeNull();
+    },
+  );
 
   it('mounts no extension where the caller hides them', () => {
     const { container } = renderAs(
@@ -230,7 +237,7 @@ describe('SessionActionButtons accessible names', () => {
         buttons({ size, primaryAppOption: { appName: 'jupyter' } }),
       );
       expect(names(container)).toEqual([
-        'session.ExecuteSpecificApp',
+        'session.ExecuteSpecificApp:Jupyter Notebook',
         size === 'small' ? 'session.SeeAppDialog' : 'session.appLauncher.App',
         'session.ExecuteTerminalApp',
         'session.SeeContainerLogs',
@@ -255,7 +262,7 @@ describe('SessionActionButtons accessible names', () => {
       />,
     );
     expect(names(container)).toEqual([
-      'session.ExecuteSpecificApp',
+      'session.ExecuteSpecificApp:File browser',
       'data.explorer.RunSSH/SFTPserver',
       'session.SeeContainerLogs',
       'session.TerminateSession',

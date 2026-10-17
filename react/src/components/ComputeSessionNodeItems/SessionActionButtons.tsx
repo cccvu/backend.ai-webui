@@ -126,7 +126,8 @@ const SessionActionButtons: React.FC<SessionActionButtonsProps> = ({
     useState(false);
 
   const userInfo = useCurrentUserInfo();
-  const isOwner = userInfo[0]?.uuid === session?.user_id;
+  // A known user id is required: an unknown user owns nothing.
+  const isOwner = !!userInfo[0]?.uuid && userInfo[0].uuid === session?.user_id;
 
   const extensionTags = useSessionActionExtensionTags();
 
